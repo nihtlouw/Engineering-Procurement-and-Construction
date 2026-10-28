@@ -1,0 +1,15 @@
+"use client";
+import { useEffect, useState } from "react";
+import { CloudOff, RefreshCw, Trash2, Wifi } from "lucide-react";
+import { Button } from "@/components/ui";
+import { clearSynced, readOutbox, syncExpense, type OfflineExpense } from "@/lib/offline";
+import { formatDate, formatIDR } from "@/lib/format";
+
+export default function OfflineOutbox({ onSynced }: { onSynced: (message: string) => void }) {
+  const [items, setItems] = useState<OfflineExpense[]>([]); const [syncing, setSyncing] = useState(false);
+  useEffect(() => { const load = () => setItems(readOutbox()); load(); window.addEventListener("epc-outbox-changed", load); window.addEventListener("online", load); return () => { window.removeEventListener("epc-outbox-changed", load); window.removeEventListener("online", load); }; }, []);
+  if (!items.length) return null;
+  const pending = items.filter((i) => i.status !== "SYNCED");
+  const syncAll = async () => { setSyncing(true); let count = 0; for (const item of pending) { try { await syncExpense(item.clientUuid); count += 1; } catch { /* item retains visible ERROR state */ } } setSyncing(false); if (count) onSynced(`${count} draft perangkat berhasil disinkronkan secara idempoten.`); };
+  return <section className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-4"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><span className="grid h-9 w-9 place-items-center rounded-xl bg-amber-100 text-amber-800"><CloudOff size={17} /></span><div><p className="text-xs font-bold text-amber-950">Antrean perangkat · {pending.length} Belum Tersinkron</p><p className="mt-1 text-[10px] text-amber-800">Data ini hanya ada di browser sampai sinkronisasi berhasil.</p></div></div><div className="flex gap-2">{items.some((i) => i.status === "SYNCED") ? <Button size="sm" variant="ghost" onClick={clearSynced}><Trash2 size={13} />Bersihkan riwayat</Button> : null}<Button size="sm" variant="secondary" loading={syncing} disabled={!pending.length} onClick={() => void syncAll()}><Wifi size={14} />Sinkronkan sekarang</Button></div></div>{pending.length ? <div className="mt-3 grid gap-2 md:grid-cols-2">{items.map((item) => <div key={item.clientUuid} className="flex items-center gap-3 rounded-xl border border-amber-200 bg-white/70 p-3"><RefreshCw size={14} className={item.status === "SYNCING" ? "animate-spin" : "text-muted"} /><div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold">{item.merchant}</p><p className="mt-0.5 text-[9px] text-muted">{formatDate(item.createdAt)} · retry {item.retries}</p>{item.error ? <p className="mt-1 text-[9px] text-red-600">{item.error}</p> : null}</div><div className="text-right"><p className="text-xs font-semibold tabular">{formatIDR(item.total, true)}</p><p className={`mt-1 text-[9px] font-bold ${item.status === "SYNCED" ? "text-emerald-700" : item.status === "ERROR" ? "text-red-600" : "text-amber-700"}`}>{item.status === "SYNCED" ? "Tersinkron" : item.status === "ERROR" ? "Error — coba lagi" : "Belum Tersinkron"}</p></div></div>)}</div> : null}</section>;
+}

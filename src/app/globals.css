@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #17211c;
+  --color-ink-soft: #28372f;
+  --color-paper: #f3f4ef;
+  --color-line: #dfe3dc;
+  --color-muted: #6d7770;
+  --color-lime: #c9f56a;
+  --color-lime-bright: #d8ff83;
+  --font-display: "Arial", "Helvetica Neue", sans-serif;
+  --font-sans: "Arial", "Helvetica Neue", sans-serif;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; background: #f3f4ef; }
+body { margin: 0; background: #f3f4ef; color: #17211c; font-family: Arial, "Helvetica Neue", sans-serif; -webkit-font-smoothing: antialiased; }
+button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+button { cursor: pointer; }
+::selection { background: #c9f56a; color: #17211c; }
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #c7cec7; border: 2px solid transparent; border-radius: 999px; background-clip: padding-box; }
+.tabular { font-variant-numeric: tabular-nums; }
+.paper-grid { background-image: linear-gradient(rgba(23,33,28,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(23,33,28,.045) 1px, transparent 1px); background-size: 32px 32px; }
+.dark-grid { background-image: linear-gradient(rgba(255,255,255,.055) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.055) 1px, transparent 1px); background-size: 48px 48px; }
+.mask-fade { mask-image: linear-gradient(to bottom, black 70%, transparent 100%); }
+.text-balance { text-wrap: balance; }
+.scrollbar-none { scrollbar-width: none; }
+.scrollbar-none::-webkit-scrollbar { display: none; }
+
+@media print {
+  body { background: white; }
+  aside, header, button, .no-print { display: none !important; }
+  main { margin: 0 !important; padding: 0 !important; }
+  .print-document { display: block !important; color: black; }
+  @page { size: A4; margin: 18mm; }
+  thead { display: table-header-group; }
+  tr, .signature-block { page-break-inside: avoid; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
