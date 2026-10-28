@@ -11,3 +11,4 @@ coverage/
 .DS_Store
 dev.err
 *.zip
+.vercel/
