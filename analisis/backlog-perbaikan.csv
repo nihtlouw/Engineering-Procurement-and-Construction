@@ -1,0 +1,60 @@
+ID,Prioritas,Area,Kategori,Temuan,Dampak,Rekomendasi,Effort,Owner yang disarankan,Kriteria selesai
+SEC-01,P0,Keamanan,Auth,Auto-seed production + password demo fallback hardcoded (seed.ts:32),Deployment baru bisa punya ADMIN dengan password publik,Seed hanya via CLI berflag; hapus akun demo; wajibkan reset password; rotasi,S,Backend,Security review memastikan tidak ada akun demo di production
+SEC-02,P0,Keamanan,Data exposure,Seluruh user/client/NPWP/contractValue dikirim ke semua peran (workspace.ts:107-109),Kebocoran direktori internal & nilai kontrak,Proyeksi DTO per permission; kirim hanya pihak relevan,M,Backend,Matriks role x field teruji otomatis
+SEC-03,P1,Keamanan,Sesi,Sesi 7 hari tanpa rotasi; tanpa cek Origin/CSRF,Sesi lama & defense-in-depth lemah,Rotasi session; idle timeout; Origin check; token CSRF,M,Backend,Penetration test lulus
+SEC-04,P0,Keamanan,Auth,Rate limit login in-memory + tanpa lockout/MFA,Bypass rate limit; brute force,Terapkan Redis/DB rate limit; lockout; audit; MFA ADMIN/FINANCE,M,Backend,Laju 100 login/menit tidak memblokir sah & menahan brute force
+SEC-05,P0,Keamanan,Secret,Secret file fallback ke DATABASE_URL / string lokal (auth.ts:73),Token file bisa dipalsukan,Throw saat boot bila secret lemah; rotasi,S,DevOps,Boot gagal tanpa FILE_SIGNING_SECRET >= 32 byte
+SEC-06,P1,Keamanan,File,MIME dari klien; tanpa AV; base64 di DB; dedup tidak berfungsi,Malware & DB bloat,Object storage + presigned upload + magic bytes + AV + kuota,L,Backend,Upload 100 MB via storage; DB tidak menyimpan biner
+SEC-07,P1,Keamanan,OCR,Tesseract sinkron tanpa rate limit,DoS & biaya,Antrean worker; rate limit; cache model; retensi hasil,M,Backend,OCR p95 < 5 detik; biaya terukur
+SEC-08,P0,Keamanan,Header,Tanpa CSP/HSTS/frame-options,Klikjacking/XSS tanpa mitigasi,Headers di next.config,S,DevOps,Scanner header lulus
+SEC-09,P1,Keamanan,Audit,Diff dokumen palsu; login/file access tidak diaudit; tanpa trigger,Tidak tamper-evident,Diff nyata; audit akses; trigger DB; hash chain; ekspor,M,Backend,Auditor dapat menelusuri 100% mutasi & akses
+SEC-10,P1,Keamanan,Idempotensi,Lookup clientUuid mengembalikan record pengguna lain (expenses/route.ts:31),Enumerasi record,Filter createdById; 409 bila milik orang lain,S,Backend,Test lintas pengguna lulus
+SEC-11,P0,Dependensi,Supply chain,1 critical (next) + 2 high (postcss),Eksploitasi kerentanan publik,Upgrade patch; Dependabot; audit di CI,S,DevOps,Audit produksi 0 critical/high
+SEC-12,P1,Keamanan,AuthZ,Tanpa middleware & user lifecycle,Route baru berisiko lupa auth; tanpa reset/undang,Middleware + modul user + test matriks,M,Backend,Test otorisasi 6 role x 22 endpoint
+SEC-13,P0,Keamanan,SoD,Invoice bisa disetujui pembuat; toggle SoD mati,Salah saji approval,Larang self-approval; hormati setting,S,Backend,Test SoD invoice & expense
+SEC-14,P2,Keamanan,Logging,Error detail & console.error tanpa redaksi,Bocor skema/PII,Pesan generik; request ID; Sentry,S,Backend,Log tanpa PII
+DOM-01,P0,Produk,Master data,Tidak bisa membuat proyek/klien/site/anggota/RAB/termin/jadwal,Aplikasi tidak bisa dipakai proyek baru,CRUD lengkap + wizard proyek,L,Full-stack,Proyek baru dari nol selesai < 15 menit
+DOM-02,P1,Domain,Budget control,Tanpa cek pagu RAB/komitmen,Overbudget tidak dicegah,Validasi sisa budget di expense & PO,M,Backend,Overbudget butuh approval khusus
+DOM-03,P1,Domain,Revenue control,Tanpa kontrol tagihan kumulatif vs kontrak/termin,Over-invoicing,Cek kumulatif + termin terpakai,M,Backend,Uji skenario 110% kontrak ditolak
+DOM-04,P1,Pajak,Kepatuhan,Hanya PPN/PPh sisi pelanggan; tanpa faktur pajak/PPN masukan/PPh vendor,Rekonsiliasi manual & risiko pajak,Field pajak + rekap bulanan + withholding vendor,L,Finance/Backend,Rekap PPN/PPh cocok dengan e-Faktur
+DOM-05,P1,Domain,Retensi,Retensi tidak otomatis; close check false-negative,Retensi tak tertagih,Potong retensi otomatis + perbaiki close check,M,Backend,Proyek tidak bisa ditutup dengan retensi terbuka
+DOM-06,P1,Domain,Approval,Satu level; tanpa ambang/delegasi/SLA,Bottleneck & approval tidak tepat,Matriks approval + eskalasi,M,Backend,Aturan ambang nilai teruji
+DOM-07,P2,Domain,Progress,Tanpa verifikasi PM/bobot 100/EVM,Progres bisa diklaim sepihak,Verifikasi progres + bobot wajib + kurva-S,M,Backend,Laporan progres disetujui PM
+DOM-08,P1,Dokumen,PDF,Renderer memotong 110 karakter & non-ASCII (pdf.ts:8),Dokumen legal tidak sesuai,Wrap, font Unicode, nomor per proyek, QR,M,Backend,BAST/invoice uji cetak identik
+DOM-09,P1,Domain,Change order,Kategori hardcoded cat-civ (projects action:84),Salah klasifikasi biaya,Kategori dari input CO,S,Backend,Review akuntansi lulus
+DOM-10,P2,Domain,Vendor,Supplier teks bebas,Duplikasi & tanpa analisis belanja,Vendor master + NPWP + kontak,M,Backend,PO & expense memakai vendor ID
+DOM-11,P1,Domain,PO,PO bisa batal setelah tagihan disetujui,Komitmen hilang dari metrik,Blokir cancel bila ada tagihan,S,Backend,Test transisi PO
+DOM-12,P2,Produk,Cakupan,Tanpa HSE/QC/NCR/material/daily report,Tidak cocok untuk kendali lapangan,Modul bertahap sesuai prioritas klien,XL,Product,Modul pilot dipakai di 1 proyek
+DOM-13,P2,Domain,Multi-currency,PPN/total ambigu untuk valas,Kesalahan kurs,Definisikan kontrak mata uang + locking rate,M,Backend,Uji USD/IDR
+DOM-14,P1,Domain,Offline,Outbox global per perangkat,Draft pengguna lain tersinkron,Scope per user + IndexedDB + enkripsi,M,Frontend,Test 2 pengguna 1 perangkat
+DOM-15,P1,Domain,Penomoran,count(*) + tahun UTC (expenses:81; documents action:31),Nomor bolong/tabrakan,Sequence per tahun + timezone Jakarta,S,Backend,Simulasi 1.000 nomor paralel
+DOM-16,P2,Domain,Reimburse,Tanpa bukti transfer,Reimburse tanpa bukti,Wajib proofFileId,S,Backend,Uji settlement
+DOM-17,P2,Domain,CO,Kontrak tidak berubah saat CO implement,Sumber kebenaran ganda,Update nilai kontrak atau jadikan view,M,Backend,Rekonsiliasi CO
+DOM-18,P2,Domain,Handover,Checklist tidak terhubung dokumen wajib,Gate bisa lolos manual,Relasi item -> dokumen,S,Backend,Uji close
+CODE-01,P0,Kualitas,Testing,0 test,Tidak ada jaring pengaman,Unit finance/domain + integration authz + E2E,M,Full-stack,Coverage finance > 80%
+CODE-02,P0,Kualitas,Lint,7 error 2 warning,Gaya tidak terjaga,Perbaiki; lint di CI,S,Full-stack,CI hijau
+CODE-03,P1,Kualitas,Maintainability,124 baris > 400 karakter,Palsu mudah regresi,Pecah komponen & util,M,Frontend,Max 200 karakter/baris
+CODE-04,P1,Data,Migrasi,Hanya drizzle-kit push,Tanpa rollback,Generate + migrate + CI check,M,Backend,Migrasi dari DB kosong & rollback lulus
+CODE-05,P1,Performa,Data access,Snapshot penuh + query kuadratik,Skala 10 ribu expense lambat,Paginasi + agregasi SQL + React Query,L,Backend,Payload < 1 MB & p95 < 2 dtk
+CODE-06,P0,Performa,DB,Tanpa index FK,Seq scan,Index komposit sesuai daftar di laporan,S,Backend,EXPLAIN tanpa seq scan pada query utama
+CODE-07,P2,Performa,UI,Tanpa paginasi/filter server,UI berat,Virtualisasi + filter server,M,Frontend,10 ribu baris lancar
+CODE-08,P1,DevOps,Build,Build butuh DATABASE_URL,Gagal CI/preview,Init DB lazy,S,Backend,Build tanpa env lulus
+CODE-09,P2,Kualitas,Resilience,Tanpa error/loading boundary,UX buruk saat error,Tambah error.tsx/loading.tsx,S,Frontend,Uji simulasi error
+CODE-10,P1,DevOps,Observability,Hanya console.error,MTTR tinggi,Sentry + log + metrics + alert,M,DevOps,Alert error rate & latency aktif
+CODE-11,P1,Kualitas,Timezone,getFullYear/toISOString UTC,Salah tanggal/nomor,Gunakan helper Jakarta,S,Backend,Test 1 Jan 00:30 WIB
+CODE-12,P2,Kualitas,Transaksi,PDF di dalam transaksi DB,Lock panjang,Generate di luar transaksi + upload,M,Backend,Finalize < 2 dtk
+CODE-13,P2,Kualitas,Lock,Advisory lock global,Serialisasi,Buffer/sequence per tabel,S,Backend,Uji throughput
+CODE-14,P1,UX,File,URL 5 menit (workspace.ts:44),Klik PDF gagal,Endpoint URL saat klik,S,Full-stack,Uji buka PDF setelah 15 menit
+CODE-15,P0,UX,Aset,Hero 404,Halaman login/dashboard tanpa visual,Tambah public/images/epc-hero.jpg atau hapus referensi,S,Frontend,Lighthouse 404 = 0
+UX-01,P1,UX,Dokumen,Editor blok JSON mentah,PM tidak bisa pakai,Form editor visual,M,Frontend,PM bisa edit tanpa JSON
+UX-02,P1,UX,A11y,139 teks 8-10px,Sulit dibaca,Minimum 12px untuk teks isi,S,Design,Audit tipografi lulus
+UX-03,P2,UX,A11y,Modal tanpa Esc/focus trap,Aksesibilitas,Tambah handler & focus management,S,Frontend,Uji keyboard
+UX-04,P2,UX,A11y,Motion tanpa reduced-motion,Hakhormat,Hormati preferensi,S,Frontend,Uji OS setting
+UX-05,P1,UX,Auth,Tanpa reset password,Pengguna terblokir,Reset via email + undangan,M,Full-stack,Uji alur undangan
+UX-06,P1,UX,Notifikasi,Tanpa read state/email/WA,Approval terlewat,Email/WA + status baca,M,Full-stack,Notifikasi terkirim < 1 menit
+UX-07,P2,UX,Pencarian,Tanpa filter/sort/bulk,Sulit menemukan data,Filter server + bulk approve,M,Frontend,UAT lulus
+OPS-01,P1,Ops,Backup,DR tidak terdokumentasi,Kehilangan data,Backup + uji restore + RPO/RTO,S,DevOps,Restore drill sukses
+OPS-02,P1,Kepatuhan,UU PDP,Tanpa kebijakan privasi/retensi/hapus,Risiko regulasi,Privacy notice + DPA + retensi + hak hapus,M,Legal/DevOps,Dokumen disetujui
+OPS-03,P2,Ops,Multi-tenant,Tanpa company_id,Tidak bisa SaaS,RLS + tenant isolation,XL,Backend,Isolasi teruji
+OPS-04,P2,Ops,SSO,Tanpa SSO,Blokir enterprise,SAML/OIDC + SCIM,L,Backend,Login via Google/Microsoft
+OPS-05,P2,Ops,Dokumentasi,README minim,Onboarding sulit,Runbook + dokumentasi API + training,S,Tech writer,Dokumentasi di review
