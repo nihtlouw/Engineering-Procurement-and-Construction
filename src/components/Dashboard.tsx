@@ -178,7 +178,7 @@ function PortfolioRow({ project, data, onClick }: { project: ProjectView; data: 
     <button onClick={onClick} className="block w-full border-b border-hairline px-4 py-3 text-left last:border-0 hover:bg-paper">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="mono text-[10.5px] tracking-[.02em] text-subtle">{project.code}</p>
+          <p className="mono text-[11px] tracking-[.02em] text-subtle">{project.code}</p>
           <p className="mt-0.5 truncate text-[12.5px] font-semibold">{project.title}</p>
           <p className="mt-0.5 truncate text-[11.5px] text-muted">{project.clientName}{project.siteName ? ` · ${project.siteName}` : ""}</p>
         </div>
