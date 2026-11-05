@@ -53,7 +53,7 @@ export default function LoginScreen({ demoPassword }: { demoPassword: string | n
           <span className="grid h-8 w-8 place-items-center rounded-[7px] bg-lime text-ink"><Zap size={15} fill="currentColor" /></span>
           <div>
             <p className="text-[12.5px] font-bold tracking-[-.01em]">ARDAYA EPC</p>
-            <p className="text-[9.5px] uppercase tracking-[.14em] text-[#B4BCB7]">Project control</p>
+            <p className="text-[11px] uppercase tracking-[.14em] text-[#B4BCB7]">Project control</p>
           </div>
         </div>
 
@@ -70,7 +70,7 @@ export default function LoginScreen({ demoPassword }: { demoPassword: string | n
           </div>
         </div>
 
-        <p className="relative text-[9.5px] uppercase tracking-[.14em] text-[#B4BCB7]">Engineering · Procurement · Construction</p>
+        <p className="relative text-[11px] uppercase tracking-[.14em] text-[#B4BCB7]">Engineering · Procurement · Construction</p>
       </section>
 
       {/* Formulir */}
