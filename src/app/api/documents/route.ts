@@ -25,7 +25,9 @@ export async function POST(request: Request) {
     const [project] = await db.select().from(projects).where(eq(projects.id, body.projectId)); const [client] = await db.select().from(clients).where(eq(clients.id, project.clientId));
     const [site] = project.siteId ? await db.select().from(sites).where(eq(sites.id, project.siteId)) : []; const [company] = await db.select().from(companySettings).limit(1);
     const pm = project.pmId ? (await db.select().from(users).where(eq(users.id, project.pmId)).limit(1))[0] : null;
-    const snapshot: Record<string, string> = { projectCode: project.code, projectTitle: project.title, clientLegalName: client.legalName, clientContact: client.contactName || "", siteName: site?.name || "", contractNumber: project.contractNumber || "", contractValue: formatIDR(project.contractValue), companyLegalName: company.legalName, pmName: pm?.name || user.name, documentDate: formatDate(new Date()) };
+    const snapshot: Record<string, string> = { projectCode: project.code, projectTitle: project.title, clientLegalName: client.legalName, clientContact: client.contactName || "", siteName: site?.name || "", contractNumber: project.contractNumber || "", // Non-breaking space after "Rp" keeps the PDF text shaping from turning
+      // "Rp4.850.000.000" into "Rp-4.850.000.000".
+      contractValue: formatIDR(project.contractValue).replace(/^(Rp)\s*/, "$1 "), companyLegalName: company.legalName, pmName: pm?.name || user.name, documentDate: formatDate(new Date()) };
     if (["INVOICE", "KWITANSI"].includes(body.templateCode!)) {
       const [invoice] = await db.select().from(customerInvoices).where(eq(customerInvoices.id, body.relatedId || "")).limit(1);
       if (!invoice || invoice.projectId !== project.id) throw new ApiError("INVOICE_REQUIRED", "Pilih invoice dari proyek yang sama.", 422);
