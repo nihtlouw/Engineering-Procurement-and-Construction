@@ -150,6 +150,42 @@ export function Skeleton({ className = "" }: { className?: string }) {
   return <div className={`skeleton ${className}`} aria-hidden />;
 }
 
+
+export function TableSkeleton({ rows = 5, cols = 4 }: { rows?: number; cols?: number }) {
+  return (
+    <div className="overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface" aria-hidden>
+      <div className="flex gap-4 border-b border-line bg-sunken px-4 py-2.5">
+        {Array.from({ length: cols }).map((_, i) => <div key={i} className="skeleton h-[11px]" style={{ width: i === 0 ? "32%" : `${14}%` }} />)}
+      </div>
+      {Array.from({ length: rows }).map((_, r) => (
+        <div key={r} className="flex items-center gap-4 border-b border-hairline px-4 py-3 last:border-0">
+          {Array.from({ length: cols }).map((_, c) => <div key={c} className="skeleton h-[12px]" style={{ width: c === 0 ? "32%" : "14%" }} />)}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function PanelSkeleton({ rows = 4 }: { rows?: number }) {
+  return (
+    <div className="overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface" aria-hidden>
+      <div className="flex items-center justify-between border-b border-line px-4 py-3">
+        <div className="skeleton h-[13px] w-28" />
+        <div className="skeleton h-[11px] w-14" />
+      </div>
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className="flex items-center gap-3 border-b border-hairline px-4 py-3 last:border-0">
+          <div className="skeleton h-7 w-7 shrink-0" />
+          <div className="flex-1">
+            <div className="skeleton h-[12px] w-3/5" />
+            <div className="skeleton mt-1.5 h-[11px] w-4/5" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function SectionTitle({ eyebrow, title, description, action }: { eyebrow?: string; title: string; description?: string; action?: ReactNode }) {
   return (
     <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">

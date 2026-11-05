@@ -164,6 +164,10 @@ p { text-wrap: pretty; }
   animation: skeleton-shimmer 1.4s ease-in-out infinite;
   border-radius: var(--radius-control);
 }
+@keyframes pending-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(320%); }
+}
 @keyframes skeleton-shimmer {
   0% { background-position: 100% 50%; }
   100% { background-position: 0 50%; }
