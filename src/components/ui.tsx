@@ -4,32 +4,187 @@ import { AlertCircle, Check, ChevronRight, LoaderCircle, X } from "lucide-react"
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
 import { LABELS } from "@/lib/domain";
 
+/* Primitif UI — token dari globals.css (rencana desain v1, bab 05). */
+
+const EASE = [0.22, 1, 0.36, 1] as const;
+
 export function Button({ children, variant = "primary", size = "md", loading, className = "", ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "secondary" | "ghost" | "danger" | "lime"; size?: "sm" | "md" | "lg"; loading?: boolean }) {
-  const variants = { primary: "bg-ink text-white hover:bg-ink-soft border-ink", secondary: "bg-white text-ink border-line hover:border-ink/30 hover:bg-paper", ghost: "bg-transparent text-muted border-transparent hover:text-ink hover:bg-ink/5", danger: "bg-red-600 text-white border-red-600 hover:bg-red-700", lime: "bg-lime text-ink border-lime hover:bg-lime-bright" };
-  const sizes = { sm: "min-h-9 px-3 text-xs rounded-lg", md: "min-h-11 px-4 text-sm rounded-xl", lg: "min-h-13 px-6 text-sm rounded-xl" };
-  return <button className={`inline-flex shrink-0 items-center justify-center gap-2 border font-semibold transition-all duration-200 active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-45 ${variants[variant]} ${sizes[size]} ${className}`} disabled={loading || props.disabled} {...props}>{loading ? <LoaderCircle size={16} className="animate-spin" /> : null}{children}</button>;
+  const variants = {
+    primary: "border-ink bg-ink text-white hover:border-ink-700 hover:bg-ink-700",
+    secondary: "border-line-strong bg-surface text-ink hover:border-ink-500 hover:bg-paper-2",
+    ghost: "border-transparent bg-transparent text-muted hover:bg-paper-2 hover:text-ink",
+    danger: "border-danger-line bg-danger-bg text-danger hover:border-danger/40 hover:bg-[#f7ddd9]",
+    lime: "border-lime bg-lime text-ink hover:border-lime-bright hover:bg-lime-bright",
+  };
+  const sizes = {
+    sm: "h-8 px-3 text-[12.5px]",
+    md: "h-10 px-4 text-[13.5px]",
+    lg: "h-12 px-5 text-sm",
+  };
+  return (
+    <button
+      className={`inline-flex shrink-0 items-center justify-center gap-2 rounded-[var(--radius-control)] border font-semibold tracking-[-.005em] transition-[background-color,border-color,color,box-shadow] duration-150 disabled:cursor-not-allowed disabled:opacity-45 ${variants[variant]} ${sizes[size]} ${className}`}
+      disabled={loading || props.disabled}
+      {...props}
+    >
+      {loading ? <LoaderCircle size={15} className="animate-spin" /> : null}
+      {children}
+    </button>
+  );
 }
-export function Badge({ value, label, dot = true }: { value: string; label?: string; dot?: boolean }) {
-  const tone = ["APPROVED", "PAID", "DONE", "BASELINE", "SETTLED", "FINAL", "IMPLEMENTED", "COMPLETED"].includes(value) ? "bg-emerald-50 text-emerald-700 border-emerald-200" : ["REJECTED", "VOIDED", "OVERDUE", "CANCELLED", "BLOCKED"].includes(value) ? "bg-red-50 text-red-700 border-red-200" : ["SUBMITTED", "PENDING", "PARTIALLY_PAID", "NEEDS_CORRECTION", "PARTIAL", "REVIEW", "INTERNAL_REVIEW"].includes(value) ? "bg-amber-50 text-amber-800 border-amber-200" : "bg-slate-100 text-slate-600 border-slate-200";
-  return <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.06em] ${tone}`}>{dot ? <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" /> : null}{label || LABELS[value] || value.replaceAll("_", " ")}</span>;
+
+const TONES = {
+  ok: "border-ok-line bg-ok-bg text-ok",
+  warn: "border-warn-line bg-warn-bg text-warn",
+  danger: "border-danger-line bg-danger-bg text-danger",
+  info: "border-info-line bg-info-bg text-info",
+  neutral: "border-neutral-line bg-neutral-bg text-neutral",
+} as const;
+
+export function toneFor(value: string): keyof typeof TONES {
+  if (["APPROVED", "PAID", "DONE", "BASELINE", "SETTLED", "FINAL", "IMPLEMENTED", "COMPLETED", "ACTIVE", "CLOSED"].includes(value)) return "ok";
+  if (["REJECTED", "VOIDED", "OVERDUE", "CANCELLED", "BLOCKED"].includes(value)) return "danger";
+  if (["SUBMITTED", "PENDING", "PARTIALLY_PAID", "NEEDS_CORRECTION", "PARTIAL", "REVIEW", "INTERNAL_REVIEW", "AT_RISK"].includes(value)) return "warn";
+  if (["IN_PROGRESS", "RUNNING", "SUBMITTED_FOR_APPROVAL"].includes(value)) return "info";
+  return "neutral";
 }
+
+export function Badge({ value, label, dot = true, tone }: { value: string; label?: string; dot?: boolean; tone?: keyof typeof TONES }) {
+  return (
+    <span className={`inline-flex h-6 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 text-[11.5px] font-semibold ${TONES[tone || toneFor(value)]}`}>
+      {dot ? <span className="h-1.5 w-1.5 rounded-full bg-current" /> : null}
+      {label || LABELS[value] || value.replaceAll("_", " ")}
+    </span>
+  );
+}
+
 export function Field({ label, hint, error, children, className = "" }: { label: string; hint?: string; error?: string; children: ReactNode; className?: string }) {
-  return <label className={`block ${className}`}><span className="mb-1.5 block text-xs font-semibold text-ink">{label}</span>{children}{hint ? <span className="mt-1.5 block text-[11px] leading-relaxed text-muted">{hint}</span> : null}{error ? <span className="mt-1 text-xs text-red-600">{error}</span> : null}</label>;
+  return (
+    <label className={`block ${className}`}>
+      <span className="mb-1.5 block text-xs font-semibold text-ink-700">{label}</span>
+      {children}
+      {error ? <span className="mt-1.5 flex items-center gap-1 text-[11.5px] font-medium text-danger">{error}</span> : hint ? <span className="mt-1.5 block text-[11.5px] leading-relaxed text-muted">{hint}</span> : null}
+    </label>
+  );
 }
-const inputClass = "min-h-11 w-full rounded-xl border border-line bg-white px-3.5 text-sm text-ink outline-none transition placeholder:text-slate-400 focus:border-ink/40 focus:ring-4 focus:ring-ink/5 disabled:bg-slate-50";
+
+const inputClass =
+  "min-h-10 w-full rounded-[var(--radius-control)] border border-line-strong bg-surface px-3 text-[13.5px] text-ink outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-subtle hover:border-ink-500 focus:border-ink focus:shadow-[0_0_0_3px_rgba(198,242,78,.45)] focus:outline-none disabled:cursor-not-allowed disabled:bg-paper-2 disabled:text-subtle";
+
 export function Input(props: InputHTMLAttributes<HTMLInputElement>) { return <input {...props} className={`${inputClass} ${props.className || ""}`} />; }
 export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) { return <select {...props} className={`${inputClass} ${props.className || ""}`} />; }
-export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) { return <textarea {...props} className={`${inputClass} min-h-24 resize-y py-3 ${props.className || ""}`} />; }
+export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) { return <textarea {...props} className={`${inputClass} min-h-24 resize-y py-2.5 ${props.className || ""}`} />; }
+
 export function Modal({ open, onClose, title, eyebrow, children, wide = false }: { open: boolean; onClose: () => void; title: string; eyebrow?: string; children: ReactNode; wide?: boolean }) {
-  return <AnimatePresence>{open ? <motion.div className="fixed inset-0 z-[80] flex items-end justify-center bg-ink/45 p-0 backdrop-blur-sm sm:items-center sm:p-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}><motion.section role="dialog" aria-modal="true" aria-label={title} className={`flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-3xl bg-[#f8f9f6] shadow-2xl sm:rounded-2xl ${wide ? "max-w-6xl" : "max-w-2xl"}`} initial={{ opacity: 0, y: 40, scale: .98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 30, scale: .98 }} transition={{ type: "spring", stiffness: 380, damping: 34 }}><header className="flex items-start justify-between border-b border-line bg-white px-5 py-4 sm:px-6"><div>{eyebrow ? <p className="mb-1 text-[10px] font-bold uppercase tracking-[.16em] text-muted">{eyebrow}</p> : null}<h2 className="font-display text-lg font-semibold tracking-tight text-ink">{title}</h2></div><button onClick={onClose} aria-label="Tutup" className="grid h-10 w-10 place-items-center rounded-full text-muted hover:bg-ink/5 hover:text-ink"><X size={19} /></button></header><div className="overflow-y-auto p-5 sm:p-6">{children}</div></motion.section></motion.div> : null}</AnimatePresence>;
+  return (
+    <AnimatePresence>
+      {open ? (
+        <motion.div
+          className="fixed inset-0 z-[80] flex items-end justify-center bg-ink-900/50 p-0 sm:items-center sm:p-6"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: .16 }}
+          onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+        >
+          <motion.section
+            role="dialog"
+            aria-modal="true"
+            aria-label={title}
+            className={`flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-[var(--radius-overlay)] bg-surface shadow-[var(--shadow-e3)] sm:rounded-[var(--radius-overlay)] ${wide ? "max-w-5xl" : "max-w-2xl"}`}
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 16 }}
+            transition={{ duration: .2, ease: EASE }}
+          >
+            <header className="flex items-start justify-between gap-4 border-b border-line px-5 py-4 sm:px-6">
+              <div>
+                {eyebrow ? <p className="mb-1 text-[11px] font-semibold uppercase tracking-[.12em] text-muted">{eyebrow}</p> : null}
+                <h2 className="text-[19px] font-semibold tracking-[-.02em] text-ink">{title}</h2>
+              </div>
+              <button onClick={onClose} aria-label="Tutup" className="grid h-8 w-8 shrink-0 place-items-center rounded-[var(--radius-control)] border border-line text-muted hover:bg-paper-2 hover:text-ink">
+                <X size={16} />
+              </button>
+            </header>
+            <div className="overflow-y-auto p-5 sm:p-6">{children}</div>
+          </motion.section>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
+  );
 }
+
 export function Toast({ toast, onClose }: { toast: { type: "success" | "error"; message: string } | null; onClose: () => void }) {
-  return <AnimatePresence>{toast ? <motion.div role="status" initial={{ opacity: 0, y: 20, scale: .96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 12 }} className={`fixed bottom-5 left-1/2 z-[100] flex w-[calc(100%-32px)] max-w-lg -translate-x-1/2 items-start gap-3 rounded-2xl border p-4 shadow-xl ${toast.type === "success" ? "border-emerald-200 bg-emerald-950 text-emerald-50" : "border-red-300 bg-red-950 text-red-50"}`}>{toast.type === "success" ? <Check size={18} className="mt-0.5 shrink-0" /> : <AlertCircle size={18} className="mt-0.5 shrink-0" />}<p className="flex-1 text-sm leading-relaxed">{toast.message}</p><button onClick={onClose} aria-label="Tutup notifikasi"><X size={16} /></button></motion.div> : null}</AnimatePresence>;
+  return (
+    <AnimatePresence>
+      {toast ? (
+        <motion.div
+          role="status"
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 10 }}
+          transition={{ duration: .18, ease: EASE }}
+          className={`fixed bottom-5 left-1/2 z-[100] flex w-[calc(100%-32px)] max-w-md -translate-x-1/2 items-start gap-3 rounded-[var(--radius-card)] border p-3.5 shadow-[var(--shadow-e3)] ${toast.type === "success" ? "border-ok-line bg-ok-bg text-ok" : "border-danger-line bg-danger-bg text-danger"}`}
+        >
+          {toast.type === "success" ? <Check size={17} className="mt-0.5 shrink-0" /> : <AlertCircle size={17} className="mt-0.5 shrink-0" />}
+          <p className="flex-1 text-[13px] font-medium leading-relaxed">{toast.message}</p>
+          <button onClick={onClose} aria-label="Tutup notifikasi" className="shrink-0 opacity-70 hover:opacity-100"><X size={15} /></button>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
+  );
 }
+
 export function EmptyState({ icon, title, description, action }: { icon?: ReactNode; title: string; description: string; action?: ReactNode }) {
-  return <div className="flex min-h-56 flex-col items-center justify-center rounded-2xl border border-dashed border-line bg-white/50 p-8 text-center"><div className="mb-3 grid h-11 w-11 place-items-center rounded-full bg-ink/5 text-muted">{icon}</div><h3 className="text-sm font-semibold text-ink">{title}</h3><p className="mt-1 max-w-sm text-xs leading-relaxed text-muted">{description}</p>{action ? <div className="mt-4">{action}</div> : null}</div>;
+  return (
+    <div className="flex min-h-52 flex-col items-center justify-center rounded-[var(--radius-card)] border border-dashed border-line-strong bg-surface p-8 text-center">
+      {icon ? <div className="mb-3 grid h-10 w-10 place-items-center rounded-full bg-paper-2 text-muted">{icon}</div> : null}
+      <h3 className="text-sm font-semibold text-ink">{title}</h3>
+      <p className="mt-1.5 max-w-[38ch] text-[12.5px] leading-relaxed text-muted">{description}</p>
+      {action ? <div className="mt-4">{action}</div> : null}
+    </div>
+  );
 }
+
+export function Skeleton({ className = "" }: { className?: string }) {
+  return <div className={`skeleton ${className}`} aria-hidden />;
+}
+
 export function SectionTitle({ eyebrow, title, description, action }: { eyebrow?: string; title: string; description?: string; action?: ReactNode }) {
-  return <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="mb-2 text-[10px] font-bold uppercase tracking-[.18em] text-muted">{eyebrow || "Ruang kerja"}</p><h1 className="font-display text-2xl font-semibold tracking-[-.03em] text-ink sm:text-3xl">{title}</h1>{description ? <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">{description}</p> : null}</div>{action}</div>;
+  return (
+    <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[.12em] text-muted">{eyebrow || "Ruang kerja"}</p>
+        <h1 className="text-[21px] font-semibold tracking-[-.025em] text-ink sm:text-[25px]">{title}</h1>
+        {description ? <p className="mt-1.5 max-w-[68ch] text-[12.5px] leading-relaxed text-muted">{description}</p> : null}
+      </div>
+      {action}
+    </div>
+  );
 }
-export function LinkButton({ children, onClick }: { children: ReactNode; onClick: () => void }) { return <button onClick={onClick} className="inline-flex items-center gap-1 text-xs font-semibold text-ink hover:gap-2">{children}<ChevronRight size={14} /></button>; }
+
+export function LinkButton({ children, onClick }: { children: ReactNode; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className="inline-flex items-center gap-1 text-[12.5px] font-semibold text-ink hover:text-ink-500">
+      {children}<ChevronRight size={14} />
+    </button>
+  );
+}
+
+export function SegmentedControl<T extends string>({ options, value, onChange, label }: { options: { value: T; label: string }[]; value: T; onChange: (v: T) => void; label?: string }) {
+  return (
+    <div role="tablist" aria-label={label} className="inline-flex overflow-hidden rounded-[var(--radius-control)] border border-line-strong bg-surface">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          role="tab"
+          aria-selected={value === o.value}
+          onClick={() => onChange(o.value)}
+          className={`h-8 border-r border-line px-3 text-[11.5px] font-semibold transition-colors last:border-r-0 ${value === o.value ? "bg-ink text-white" : "text-muted hover:bg-paper-2"}`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
