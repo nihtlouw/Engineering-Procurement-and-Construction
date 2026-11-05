@@ -5,48 +5,125 @@ import { ArrowRight, CheckCircle2, Eye, EyeOff, LockKeyhole, ShieldCheck, Zap } 
 import { useRouter } from "next/navigation";
 import { Button, Input, Field } from "@/components/ui";
 
+/* Halaman masuk — rencana desain v1 bab 09.
+   Panel kiri memakai pola garis SVG (bukan foto) supaya tidak ada aset yang gagal dimuat
+   dan tidak memuat dekorasi berat. Tombol akun demo hanya tampil bila mode demo aktif. */
+
 const accounts = [
   { role: "PM", email: "pm@ardaya.id", name: "Bagas Prasetyo", detail: "Proyek, biaya & approval" },
   { role: "FINANCE", email: "finance@ardaya.id", name: "Maya Puspita", detail: "Tagihan, PPh & reimburse" },
   { role: "FIELD", email: "field@ardaya.id", name: "Rizky Ramadhan", detail: "Pengeluaran & progres site" },
   { role: "ADMIN", email: "admin@ardaya.id", name: "Aditya Nugraha", detail: "Seluruh kontrol & override" },
 ];
+
+const EASE = [0.22, 1, 0.36, 1] as const;
+
 export default function LoginScreen({ demoPassword }: { demoPassword: string | null }) {
-  const router = useRouter(); const [email, setEmail] = useState("pm@ardaya.id"); const [password, setPassword] = useState(demoPassword || ""); const [show, setShow] = useState(false); const [loading, setLoading] = useState(false); const [error, setError] = useState("");
+  const router = useRouter();
+  const [email, setEmail] = useState("pm@ardaya.id");
+  const [password, setPassword] = useState(demoPassword || "");
+  const [show, setShow] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
   const login = async (loginEmail = email, loginPassword = password) => {
     setLoading(true); setError("");
-    try { const response = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: loginEmail, password: loginPassword }) }); const body = await response.json(); if (!response.ok) throw new Error(body.message); router.refresh(); }
-    catch (e) { setError(e instanceof Error ? e.message : "Login gagal."); setLoading(false); }
+    try {
+      const response = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: loginEmail, password: loginPassword }) });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.message);
+      router.refresh();
+    } catch (e) { setError(e instanceof Error ? e.message : "Login gagal."); setLoading(false); }
   };
-  return <main className="grid min-h-dvh bg-[#f4f5f1] lg:grid-cols-[1.12fr_.88fr]">
-    <section className="relative hidden min-h-dvh overflow-hidden bg-ink lg:block">
-      <motion.div className="absolute inset-0 bg-[url('/images/epc-hero.jpg')] bg-cover bg-center" initial={{ scale: 1.12, opacity: 0 }} animate={{ scale: 1, opacity: .62 }} transition={{ duration: 1.5, ease: [0.22, 1, 0.36, 1] }} />
-      <div className="absolute inset-0 bg-gradient-to-t from-[#101813] via-[#101813]/45 to-[#101813]/25" />
-      <div className="relative z-10 flex h-full flex-col justify-between p-12 xl:p-16">
-        <motion.div initial={{ opacity: 0, y: -15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: .2 }} className="flex items-center gap-3 text-white"><span className="grid h-10 w-10 place-items-center rounded-xl bg-lime text-ink"><Zap size={20} fill="currentColor" /></span><div><p className="font-display text-base font-bold tracking-tight">ARDAYA<span className="text-lime">/</span>EPC</p><p className="text-[9px] uppercase tracking-[.25em] text-white/55">Project control system</p></div></motion.div>
-        <div className="max-w-2xl">
-          <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: .45 }} className="mb-6 flex items-center gap-2 text-xs font-semibold uppercase tracking-[.18em] text-lime"><span className="h-px w-8 bg-lime" />Satu sumber kebenaran proyek</motion.p>
-          <div className="overflow-hidden"><motion.h1 initial={{ y: "110%" }} animate={{ y: 0 }} transition={{ delay: .3, duration: .8, ease: [0.22, 1, 0.36, 1] }} className="font-display text-[clamp(3rem,5.5vw,5.7rem)] font-medium leading-[.96] tracking-[-.055em] text-white">Dari nota lapangan<br />hingga <span className="text-lime">BAST.</span></motion.h1></div>
-          <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: .75 }} className="mt-7 max-w-lg text-base leading-relaxed text-white/65">Kendalikan biaya, komitmen, penagihan, dan serah terima proyek elektro dalam satu alur yang dapat diaudit.</motion.p>
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: .95 }} className="mt-10 flex gap-7 text-xs text-white/60"><span className="flex items-center gap-2"><ShieldCheck size={15} className="text-lime" />RBAC per proyek</span><span className="flex items-center gap-2"><CheckCircle2 size={15} className="text-lime" />Audit append-only</span></motion.div>
+
+  return (
+    <main className="grid min-h-dvh bg-paper lg:grid-cols-2">
+      {/* Panel identitas */}
+      <section className="relative hidden flex-col justify-between overflow-hidden bg-ink-900 p-10 text-white lg:flex xl:p-14">
+        <svg aria-hidden className="pointer-events-none absolute inset-0 h-full w-full opacity-[.16]" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <pattern id="login-lines" width="48" height="48" patternUnits="userSpaceOnUse">
+              <path d="M0 0H48M0 0V48" stroke="#FFFFFF" strokeWidth=".6" fill="none" />
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#login-lines)" />
+        </svg>
+
+        <div className="relative flex items-center gap-2.5">
+          <span className="grid h-8 w-8 place-items-center rounded-[7px] bg-lime text-ink"><Zap size={15} fill="currentColor" /></span>
+          <div>
+            <p className="text-[12.5px] font-bold tracking-[-.01em]">ARDAYA EPC</p>
+            <p className="text-[9.5px] uppercase tracking-[.14em] text-[#B4BCB7]">Project control</p>
+          </div>
         </div>
-        <p className="text-[10px] uppercase tracking-[.18em] text-white/35">Engineering · Procurement · Construction</p>
-      </div>
-    </section>
-    <section className="flex min-h-dvh items-center justify-center px-5 py-10 sm:px-10">
-      <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .6 }} className="w-full max-w-md">
-        <div className="mb-10 flex items-center gap-3 lg:hidden"><span className="grid h-10 w-10 place-items-center rounded-xl bg-ink text-lime"><Zap size={20} /></span><p className="font-display font-bold">ARDAYA/EPC</p></div>
-        <p className="text-[10px] font-bold uppercase tracking-[.2em] text-muted">Workspace kontraktor EPC</p><h2 className="mt-3 font-display text-4xl font-semibold tracking-[-.045em] text-ink">Selamat datang.</h2><p className="mt-3 text-sm leading-relaxed text-muted">Masuk untuk melanjutkan kontrol proyek. Akses menyesuaikan peran dan keanggotaan proyek Anda.</p>
-        <form className="mt-8 space-y-4" onSubmit={(e) => { e.preventDefault(); void login(); }}>
-          <Field label="Email kantor"><Input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></Field>
-          <Field label="Password"><div className="relative"><Input type={show ? "text" : "password"} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} className="pr-12" /><button type="button" onClick={() => setShow(!show)} aria-label="Tampilkan password" className="absolute right-1 top-1 grid h-9 w-9 place-items-center rounded-lg text-muted hover:bg-ink/5">{show ? <EyeOff size={17} /> : <Eye size={17} />}</button></div></Field>
-          {error ? <motion.p initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs leading-relaxed text-red-700">{error}</motion.p> : null}
-          <Button type="submit" size="lg" loading={loading} className="w-full">Masuk ke workspace<ArrowRight size={17} /></Button>
-        </form>
-        <div className="my-7 flex items-center gap-3"><span className="h-px flex-1 bg-line" /><span className="text-[10px] font-semibold uppercase tracking-wider text-muted">Akun demo</span><span className="h-px flex-1 bg-line" /></div>
-        <div className="grid gap-2 sm:grid-cols-2">{accounts.map((account) => <button key={account.role} disabled={loading} onClick={() => { setEmail(account.email); setPassword(demoPassword || ""); if (demoPassword) void login(account.email, demoPassword); }} className="group rounded-xl border border-line bg-white p-3 text-left transition hover:-translate-y-0.5 hover:border-ink/25 hover:shadow-sm disabled:opacity-50"><div className="flex items-center justify-between"><span className="text-[10px] font-bold tracking-wider text-ink">{account.role}</span><ArrowRight size={13} className="text-muted transition group-hover:translate-x-1" /></div><p className="mt-1.5 text-xs font-semibold text-ink">{account.name}</p><p className="mt-0.5 text-[10px] text-muted">{account.detail}</p></button>)}</div>
-        <p className="mt-5 flex items-start gap-2 text-[10px] leading-relaxed text-muted"><LockKeyhole size={13} className="mt-0.5 shrink-0" />{demoPassword ? `Password demo: ${demoPassword}. Pemilihan akun tetap diverifikasi oleh server.` : "Password demo dikonfigurasi melalui SEED_DEMO_PASSWORD. Pilih akun untuk mengisi email, lalu masukkan password."}</p>
-      </motion.div>
-    </section>
-  </main>;
+
+        <div className="relative max-w-md">
+          <motion.h1 initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .45, ease: EASE }} className="text-[34px] font-semibold leading-[1.08] tracking-[-.03em]">
+            Dari nota lapangan<br />sampai <span className="text-lime">BAST</span>
+          </motion.h1>
+          <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: .12, duration: .4 }} className="mt-3.5 max-w-sm text-[13px] leading-relaxed text-[#B4BCB7]">
+            Satu alur biaya, komitmen, tagihan, dan serah terima yang bisa diaudit sampai ke bukti dan persetujuannya.
+          </motion.p>
+          <div className="mt-7 flex flex-wrap gap-x-6 gap-y-2 text-[11.5px] text-[#B4BCB7]">
+            <span className="flex items-center gap-1.5"><ShieldCheck size={14} className="text-lime" />RBAC per proyek</span>
+            <span className="flex items-center gap-1.5"><CheckCircle2 size={14} className="text-lime" />Audit append only</span>
+          </div>
+        </div>
+
+        <p className="relative text-[9.5px] uppercase tracking-[.14em] text-[#B4BCB7]">Engineering · Procurement · Construction</p>
+      </section>
+
+      {/* Formulir */}
+      <section className="flex min-h-dvh items-center justify-center px-5 py-10 sm:px-10">
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .3, ease: EASE }} className="w-full max-w-[380px]">
+          <div className="mb-8 flex items-center gap-2.5 lg:hidden">
+            <span className="grid h-8 w-8 place-items-center rounded-[7px] bg-ink text-lime"><Zap size={15} /></span>
+            <p className="text-[13px] font-bold">ARDAYA EPC</p>
+          </div>
+
+          <h2 className="text-[21px] font-semibold tracking-[-.025em]">Selamat datang</h2>
+          <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">Masuk untuk melanjutkan kontrol proyek. Akses menyesuaikan peran dan keanggotaan proyek Anda.</p>
+
+          <form className="mt-6 space-y-3.5" onSubmit={(e) => { e.preventDefault(); void login(); }}>
+            <Field label="Email kantor"><Input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></Field>
+            <Field label="Kata sandi">
+              <div className="relative">
+                <Input type={show ? "text" : "password"} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} className="pr-11" />
+                <button type="button" onClick={() => setShow(!show)} aria-label={show ? "Sembunyikan kata sandi" : "Tampilkan kata sandi"} className="absolute right-0.5 top-0.5 grid h-9 w-9 place-items-center rounded-[var(--radius-control)] text-muted hover:bg-paper-2 hover:text-ink">
+                  {show ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </Field>
+            {error ? <p role="alert" className="rounded-[var(--radius-control)] border border-danger-line bg-danger-bg px-3 py-2 text-[12px] leading-relaxed text-danger">{error}</p> : null}
+            <Button type="submit" size="lg" loading={loading} className="w-full">Masuk ke workspace<ArrowRight size={16} /></Button>
+          </form>
+
+          {demoPassword ? (
+            <>
+              <div className="my-6 flex items-center gap-2.5">
+                <span className="h-px flex-1 bg-line" />
+                <span className="text-[11px] font-semibold uppercase tracking-[.12em] text-muted">Akun demo</span>
+                <span className="h-px flex-1 bg-line" />
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {accounts.map((account) => (
+                  <button key={account.role} disabled={loading} onClick={() => { setEmail(account.email); setPassword(demoPassword); void login(account.email, demoPassword); }} className="rounded-[var(--radius-control)] border border-line-strong bg-surface p-2.5 text-left transition-colors hover:border-ink-500 hover:bg-paper-2 disabled:opacity-50">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-semibold uppercase tracking-[.08em] text-muted">{account.role}</span>
+                      <ArrowRight size={12} className="text-subtle" />
+                    </div>
+                    <p className="mt-1 text-[12.5px] font-semibold">{account.name}</p>
+                    <p className="mt-0.5 text-[11px] leading-relaxed text-muted">{account.detail}</p>
+                  </button>
+                ))}
+              </div>
+              <p className="mt-4 flex items-start gap-1.5 text-[11px] leading-relaxed text-muted"><LockKeyhole size={12} className="mt-0.5 shrink-0" />Pemilihan akun tetap diverifikasi server. Mode demo aktif hanya di lingkungan pengembangan.</p>
+            </>
+          ) : (
+            <p className="mt-5 flex items-start gap-1.5 text-[11px] leading-relaxed text-muted"><LockKeyhole size={12} className="mt-0.5 shrink-0" />Kata sandi demo tidak dikonfigurasi pada lingkungan ini. Hubungi admin untuk akses akun.</p>
+          )}
+        </motion.div>
+      </section>
+    </main>
+  );
 }
