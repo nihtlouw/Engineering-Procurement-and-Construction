@@ -1,6 +1,7 @@
 "use client";
 import { AnimatePresence, motion } from "motion/react";
 import { AlertCircle, Check, ChevronRight, LoaderCircle, X } from "lucide-react";
+import { useEffect, useId, useRef } from "react";
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
 import { LABELS } from "@/lib/domain";
 
@@ -75,7 +76,43 @@ export function Input(props: InputHTMLAttributes<HTMLInputElement>) { return <in
 export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) { return <select {...props} className={`${inputClass} ${props.className || ""}`} />; }
 export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) { return <textarea {...props} className={`${inputClass} min-h-24 resize-y py-2.5 ${props.className || ""}`} />; }
 
-export function Modal({ open, onClose, title, eyebrow, children, wide = false }: { open: boolean; onClose: () => void; title: string; eyebrow?: string; children: ReactNode; wide?: boolean }) {
+export function Modal({ open, onClose, title, eyebrow, children, wide = false, footer }: { open: boolean; onClose: () => void; title: string; eyebrow?: string; children: ReactNode; wide?: boolean; footer?: ReactNode }) {
+  const panelRef = useRef<HTMLElement>(null);
+  const titleId = useId();
+
+  /* Fokus dikurung di dalam dialog, Escape menutup, dan fokus kembali ke pemicu saat ditutup.
+     Latar di belakang tidak bisa digulir selama dialog terbuka. */
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const panel = panelRef.current;
+    const focusables = () => Array.from(panel?.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])') || []).filter((el) => el.offsetParent !== null);
+    const timer = window.setTimeout(() => {
+      const target = panel?.querySelector<HTMLElement>("[data-autofocus]") || focusables()[0];
+      target?.focus({ preventScroll: true });
+    }, 40);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { event.stopPropagation(); onClose(); return; }
+      if (event.key !== "Tab") return;
+      const items = focusables();
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      if (!event.shiftKey && active === last) { event.preventDefault(); first.focus(); }
+      else if (event.shiftKey && (active === first || !panel?.contains(active))) { event.preventDefault(); last.focus(); }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      previous?.focus?.({ preventScroll: true });
+    };
+  }, [open, onClose]);
+
   return (
     <AnimatePresence>
       {open ? (
@@ -88,9 +125,10 @@ export function Modal({ open, onClose, title, eyebrow, children, wide = false }:
           onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
           <motion.section
+            ref={panelRef}
             role="dialog"
             aria-modal="true"
-            aria-label={title}
+            aria-labelledby={titleId}
             className={`flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-[var(--radius-overlay)] bg-surface shadow-[var(--shadow-e3)] sm:rounded-[var(--radius-overlay)] ${wide ? "max-w-5xl" : "max-w-2xl"}`}
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
@@ -100,13 +138,14 @@ export function Modal({ open, onClose, title, eyebrow, children, wide = false }:
             <header className="flex items-start justify-between gap-4 border-b border-line px-5 py-4 sm:px-6">
               <div>
                 {eyebrow ? <p className="mb-1 text-[11px] font-semibold uppercase tracking-[.12em] text-muted">{eyebrow}</p> : null}
-                <h2 className="text-[19px] font-semibold tracking-[-.02em] text-ink">{title}</h2>
+                <h2 id={titleId} className="text-[19px] font-semibold tracking-[-.02em] text-ink">{title}</h2>
               </div>
-              <button onClick={onClose} aria-label="Tutup" className="grid h-8 w-8 shrink-0 place-items-center rounded-[var(--radius-control)] border border-line text-muted hover:bg-paper-2 hover:text-ink">
+              <button onClick={onClose} aria-label="Tutup dialog" title="Tutup (Esc)" className="grid h-8 w-8 shrink-0 place-items-center rounded-[var(--radius-control)] border border-line text-muted hover:bg-paper-2 hover:text-ink">
                 <X size={16} />
               </button>
             </header>
-            <div className="overflow-y-auto p-5 sm:p-6">{children}</div>
+            <div className="overflow-y-auto overscroll-contain p-5 sm:p-6">{children}</div>
+            {footer ? <div className="border-t border-line bg-sunken px-5 py-3 sm:px-6">{footer}</div> : null}
           </motion.section>
         </motion.div>
       ) : null}
@@ -120,15 +159,16 @@ export function Toast({ toast, onClose }: { toast: { type: "success" | "error"; 
       {toast ? (
         <motion.div
           role="status"
+          aria-live="polite"
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 10 }}
           transition={{ duration: .18, ease: EASE }}
-          className={`fixed bottom-5 left-1/2 z-[100] flex w-[calc(100%-32px)] max-w-md -translate-x-1/2 items-start gap-3 rounded-[var(--radius-card)] border p-3.5 shadow-[var(--shadow-e3)] ${toast.type === "success" ? "border-ok-line bg-ok-bg text-ok" : "border-danger-line bg-danger-bg text-danger"}`}
+          className={`fixed inset-x-4 bottom-4 z-[100] mx-auto flex max-w-md items-start gap-3 rounded-[var(--radius-card)] border p-3.5 shadow-[var(--shadow-e3)] sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 ${toast.type === "success" ? "border-ok-line bg-ok-bg text-ok" : "border-danger-line bg-danger-bg text-danger"}`}
         >
           {toast.type === "success" ? <Check size={17} className="mt-0.5 shrink-0" /> : <AlertCircle size={17} className="mt-0.5 shrink-0" />}
           <p className="flex-1 text-[13px] font-medium leading-relaxed">{toast.message}</p>
-          <button onClick={onClose} aria-label="Tutup notifikasi" className="shrink-0 opacity-70 hover:opacity-100"><X size={15} /></button>
+          <button onClick={onClose} aria-label="Tutup notifikasi" className="grid h-6 w-6 shrink-0 place-items-center rounded-[var(--radius-control)] opacity-70 hover:bg-black/5 hover:opacity-100"><X size={14} /></button>
         </motion.div>
       ) : null}
     </AnimatePresence>

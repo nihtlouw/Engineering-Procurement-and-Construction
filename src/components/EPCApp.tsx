@@ -31,12 +31,30 @@ type Composer = "expense" | "purchase" | "invoice" | "document" | null;
 export default function EPCApp({ initialData }: { initialData: AppData }) {
   const data = initialData; const router = useRouter(); const [isPending, startTransition] = useTransition();
   const [view, setView] = useState(data.user.role === "FIELD" ? "projects" : "dashboard"); const [projectId, setProjectId] = useState(data.projects[0]?.id || ""); const [projectTab, setProjectTab] = useState("summary"); const [mobileNav, setMobileNav] = useState(false); const [composer, setComposer] = useState<Composer>(null); const [purchasePrefill, setPurchasePrefill] = useState<PurchaseView | null>(null); const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null); const [search, setSearch] = useState(""); const [searchOpen, setSearchOpen] = useState(false); const [notificationsOpen, setNotificationsOpen] = useState(false); const [profileOpen, setProfileOpen] = useState(false);
+  const syncHash = (next: string, pid: string, tab?: string) => {
+    const suffix = next === "projects" && pid ? `/${pid}${tab ? `/${tab}` : ""}` : "";
+    const target = `#/${next}${suffix}`;
+    if (window.location.hash !== target) window.history.pushState(null, "", target);
+  };
+  useEffect(() => {
+    const applyHash = () => {
+      const [next, pid, tab] = window.location.hash.replace(/^#\/?/, "").split("/");
+      if (next && navItems.some((n) => n.id === next)) setView(next);
+      if (pid && data.projects.some((p) => p.id === pid)) setProjectId(pid);
+      if (tab && ["summary", "budget", "schedule", "procurement", "billing", "changes", "handover", "documents"].includes(tab)) setProjectTab(tab);
+    };
+    applyHash();
+    window.addEventListener("popstate", applyHash);
+    window.addEventListener("hashchange", applyHash);
+    return () => { window.removeEventListener("popstate", applyHash); window.removeEventListener("hashchange", applyHash); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => { const savedView = localStorage.getItem("epc-view"); const savedProject = localStorage.getItem("epc-project"); const savedTab = localStorage.getItem("epc-tab"); if (savedView && navItems.some((n) => n.id === savedView)) setView(savedView); if (savedProject && data.projects.some((p) => p.id === savedProject)) setProjectId(savedProject); if (savedTab) setProjectTab(savedTab); }, []);
   useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(null), 5000); return () => clearTimeout(timer); }, [toast]);
   const project = data.projects.find((p) => p.id === projectId) || data.projects[0];const unreadCount = data.notifications.filter((n) => !n.readAt).length; const pendingCount = data.expenses.filter((e) => e.approvalStatus === "SUBMITTED" && (e.assignedApproverId === data.user.id || data.user.role === "ADMIN")).length;
-  const navigate = (next: string) => { setView(next); localStorage.setItem("epc-view", next); setMobileNav(false); setSearchOpen(false); window.scrollTo({ top: 0, behavior: "smooth" }); };
-  const selectProject = (id: string) => { setProjectId(id); localStorage.setItem("epc-project", id); navigate("projects"); };
-  const changeTab = (tab: string) => { setProjectTab(tab); localStorage.setItem("epc-tab", tab); };
+  const navigate = (next: string) => { setView(next); localStorage.setItem("epc-view", next); setMobileNav(false); setSearchOpen(false); syncHash(next, projectId); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const selectProject = (id: string) => { setProjectId(id); localStorage.setItem("epc-project", id); setView("projects"); localStorage.setItem("epc-view", "projects"); setMobileNav(false); syncHash("projects", id); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const changeTab = (tab: string) => { setProjectTab(tab); localStorage.setItem("epc-tab", tab); syncHash("projects", projectId, tab); };
   const saved = (message: string) => { setToast({ type: "success", message }); startTransition(() => router.refresh()); };
   const allowedNav = navItems.filter((n) => !n.permission || data.user.permissions.includes(n.permission as (typeof PERMISSIONS)[number]));
   const searchResults = useMemo(() => { if (!search.trim()) return []; const q = search.toLowerCase(); return [...data.projects.filter((p) => `${p.code} ${p.title} ${p.clientName}`.toLowerCase().includes(q)).slice(0, 4).map((p) => ({ id: p.id, type: "Proyek", title: p.title, meta: p.code, view: "projects" })), ...data.expenses.filter((e) => `${e.code} ${e.merchantName}`.toLowerCase().includes(q)).slice(0, 3).map((e) => ({ id: e.id, type: "Biaya", title: e.merchantName || e.code, meta: `${e.code} · ${formatIDR(e.totalAmount, true)}`, view: "expenses" })), ...data.invoices.filter((i) => i.number.toLowerCase().includes(q)).slice(0, 3).map((i) => ({ id: i.id, type: "Invoice", title: i.number, meta: `${i.projectCode} · ${formatIDR(i.balance, true)}`, view: "invoices" }))]; }, [search, data]);
