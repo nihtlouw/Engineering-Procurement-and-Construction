@@ -35,3 +35,20 @@ Configure these environment variables in the hosting provider:
 - `SEED_DEMO_PASSWORD`: optional initial demo password.
 
 Never commit `.env.local` or any Neon password to the repository.
+
+## Dokumentasi
+
+- `docs/TUTORIAL-DAN-UJI-SCOPE.md` — cakupan tutorial dan skenario uji.
+- `docs/RINGKASAN-DESAIN-UI.md` — ringkasan keputusan desain antarmuka.
+- `public/docs/Panduan-Ardaya-EPC.pdf` — panduan pemakaian lengkap (21 halaman, bahasa Indonesia).
+
+### Membangun ulang PDF panduan
+
+Isi panduan berada di `tools/docs-content.mjs`; tata letak PDF dikendalikan `tools/build-docs-pdf.mjs` memakai `pdf-lib` (tanpa Chromium atau pandoc). Alat bantu ini memerlukan tiga paket tambahan yang tidak dipakai aplikasi saat berjalan:
+
+```bash
+npm install --no-save @pdf-lib/fontkit wawoff2 @fontsource/instrument-sans
+node tools/build-docs-pdf.mjs
+```
+
+Pasang ketiganya dalam satu perintah: `npm install --no-save` akan melepas paket `--no-save` lain yang tidak disebut pada perintah yang sama.
