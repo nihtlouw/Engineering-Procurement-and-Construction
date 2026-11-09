@@ -52,3 +52,13 @@ node tools/build-docs-pdf.mjs
 ```
 
 Pasang ketiganya dalam satu perintah: `npm install --no-save` akan melepas paket `--no-save` lain yang tidak disebut pada perintah yang sama.
+
+## Konsep desain v2 (belum diterapkan)
+
+`design/v2/index.html` adalah papan konsep untuk arah desain berikutnya: seluruh halaman aplikasi dalam satu berkas statis, tanpa JavaScript dan tanpa server — cukup dibuka di peramban.
+
+```bash
+node design/v2/build.mjs   # rakit ulang index.html dari part*.html
+```
+
+Isi `design/v2/`: `part1..part5.html` (potongan papan), `concept.css` (token dan komponen v2), `build.mjs` (perakit + penyuntik kerangka rail/topbar/tab). Belum ada berkas di `src/` yang diubah.
