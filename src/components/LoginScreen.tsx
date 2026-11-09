@@ -39,7 +39,7 @@ export default function LoginScreen({ demoPassword }: { demoPassword: string | n
   return (
     <main className="grid min-h-dvh bg-paper lg:grid-cols-2">
       {/* Panel identitas */}
-      <section className="relative hidden flex-col justify-between overflow-hidden bg-ink-900 p-10 text-white lg:flex xl:p-14">
+      <section className="relative hidden flex-col justify-between overflow-hidden bg-ink p-10 text-white lg:flex xl:p-14">
         <svg aria-hidden className="pointer-events-none absolute inset-0 h-full w-full opacity-[.16]" xmlns="http://www.w3.org/2000/svg">
           <defs>
             <pattern id="login-lines" width="48" height="48" patternUnits="userSpaceOnUse">
@@ -50,27 +50,28 @@ export default function LoginScreen({ demoPassword }: { demoPassword: string | n
         </svg>
 
         <div className="relative flex items-center gap-2.5">
-          <span className="grid h-8 w-8 place-items-center rounded-[7px] bg-lime text-ink"><Zap size={15} fill="currentColor" /></span>
+          <span className="grid h-8 w-8 place-items-center rounded-[7px] bg-lime text-[14px] font-extrabold text-ink">A</span>
           <div>
-            <p className="text-[12.5px] font-bold tracking-[-.01em]">ARDAYA EPC</p>
-            <p className="text-[11px] uppercase tracking-[.14em] text-[#B4BCB7]">Project control</p>
+            <p className="text-[12.5px] font-bold tracking-[.01em]">ARDAYA EPC</p>
+            <p className="text-[9.5px] uppercase tracking-[.16em] text-[#7d8a83]">Project control</p>
           </div>
         </div>
 
         <div className="relative max-w-md">
-          <motion.h1 initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .45, ease: EASE }} className="text-[34px] font-semibold leading-[1.08] tracking-[-.03em]">
-            Dari nota lapangan<br />sampai <span className="text-lime">BAST</span>
+          <motion.h1 initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .45, ease: EASE }} className="text-[38px] font-semibold leading-[1.02] tracking-[-.035em] xl:text-[42px]">
+            Dari nota lapangan<br />sampai <span className="text-lime">BAST</span>.
           </motion.h1>
-          <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: .12, duration: .4 }} className="mt-3.5 max-w-sm text-[13px] leading-relaxed text-[#B4BCB7]">
-            Satu alur biaya, komitmen, tagihan, dan serah terima yang bisa diaudit sampai ke bukti dan persetujuannya.
+          <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: .12, duration: .4 }} className="mt-4 max-w-sm text-[12.5px] leading-relaxed text-[#98a49d]">
+            Satu alur biaya, komitmen, tagihan, dan serah terima. Setiap angka bisa ditelusuri sampai ke bukti nota dan keputusan yang menyetujuinya.
           </motion.p>
-          <div className="mt-7 flex flex-wrap gap-x-6 gap-y-2 text-[11.5px] text-[#B4BCB7]">
-            <span className="flex items-center gap-1.5"><ShieldCheck size={14} className="text-lime" />RBAC per proyek</span>
-            <span className="flex items-center gap-1.5"><CheckCircle2 size={14} className="text-lime" />Audit append only</span>
+          <div className="mt-7 flex flex-wrap gap-x-6 gap-y-2 text-[11px] text-[#7d8a83]">
+            <span className="flex items-center gap-1.5"><ShieldCheck size={13} className="text-lime" />RBAC per proyek</span>
+            <span className="flex items-center gap-1.5"><CheckCircle2 size={13} className="text-lime" />Audit append only</span>
+            <span className="flex items-center gap-1.5"><Zap size={13} className="text-lime" />Nota → biaya aktual</span>
           </div>
         </div>
 
-        <p className="relative text-[11px] uppercase tracking-[.14em] text-[#B4BCB7]">Engineering · Procurement · Construction</p>
+        <p className="relative text-[10px] uppercase tracking-[.16em] text-[#66736b]">Engineering · Procurement · Construction</p>
       </section>
 
       {/* Formulir */}

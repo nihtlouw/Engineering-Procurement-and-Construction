@@ -15,7 +15,7 @@ export function Button({ children, variant = "primary", size = "md", loading, cl
     secondary: "border-line-strong bg-surface text-ink hover:border-ink-500 hover:bg-paper-2",
     ghost: "border-transparent bg-transparent text-muted hover:bg-paper-2 hover:text-ink",
     danger: "border-danger-line bg-danger-bg text-danger hover:border-danger/40 hover:bg-[#f7ddd9]",
-    lime: "border-lime bg-lime text-ink hover:border-lime-bright hover:bg-lime-bright",
+    lime: "border-lime-bright bg-lime text-ink hover:border-lime hover:bg-[#b0ea55]",
   };
   const sizes = {
     sm: "h-8 px-3 text-[12.5px]",
@@ -40,20 +40,22 @@ const TONES = {
   danger: "border-danger-line bg-danger-bg text-danger",
   info: "border-info-line bg-info-bg text-info",
   neutral: "border-neutral-line bg-neutral-bg text-neutral",
+  risk: "border-risk-line bg-risk-bg text-risk",
 } as const;
 
 export function toneFor(value: string): keyof typeof TONES {
   if (["APPROVED", "PAID", "DONE", "BASELINE", "SETTLED", "FINAL", "IMPLEMENTED", "COMPLETED", "ACTIVE", "CLOSED"].includes(value)) return "ok";
   if (["REJECTED", "VOIDED", "OVERDUE", "CANCELLED", "BLOCKED"].includes(value)) return "danger";
-  if (["SUBMITTED", "PENDING", "PARTIALLY_PAID", "NEEDS_CORRECTION", "PARTIAL", "REVIEW", "INTERNAL_REVIEW", "AT_RISK"].includes(value)) return "warn";
+  if (["AT_RISK", "OVER_BUDGET"].includes(value)) return "risk";
+  if (["SUBMITTED", "PENDING", "PARTIALLY_PAID", "NEEDS_CORRECTION", "PARTIAL", "REVIEW", "INTERNAL_REVIEW"].includes(value)) return "warn";
   if (["IN_PROGRESS", "RUNNING", "SUBMITTED_FOR_APPROVAL"].includes(value)) return "info";
   return "neutral";
 }
 
 export function Badge({ value, label, dot = true, tone }: { value: string; label?: string; dot?: boolean; tone?: keyof typeof TONES }) {
   return (
-    <span className={`inline-flex h-6 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 text-[11.5px] font-semibold ${TONES[tone || toneFor(value)]}`}>
-      {dot ? <span className="h-1.5 w-1.5 rounded-full bg-current" /> : null}
+    <span className={`inline-flex h-[22px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2 text-[11px] font-semibold tracking-[-.005em] ${TONES[tone || toneFor(value)]}`}>
+      {dot ? <span className="h-[5px] w-[5px] rounded-full bg-current" /> : null}
       {label || LABELS[value] || value.replaceAll("_", " ")}
     </span>
   );
@@ -177,10 +179,10 @@ export function Toast({ toast, onClose }: { toast: { type: "success" | "error"; 
 
 export function EmptyState({ icon, title, description, action }: { icon?: ReactNode; title: string; description: string; action?: ReactNode }) {
   return (
-    <div className="flex min-h-52 flex-col items-center justify-center rounded-[var(--radius-card)] border border-dashed border-line-strong bg-surface p-8 text-center">
-      {icon ? <div className="mb-3 grid h-10 w-10 place-items-center rounded-full bg-paper-2 text-muted">{icon}</div> : null}
-      <h3 className="text-sm font-semibold text-ink">{title}</h3>
-      <p className="mt-1.5 max-w-[38ch] text-[12.5px] leading-relaxed text-muted">{description}</p>
+    <div className="flex min-h-48 flex-col items-center justify-center rounded-[var(--radius-card)] border border-dashed border-line-strong bg-surface p-8 text-center">
+      {icon ? <div className="mb-3 grid h-9 w-9 place-items-center rounded-[var(--radius-control)] border border-line bg-paper-2 text-muted">{icon}</div> : null}
+      <h3 className="text-[13.5px] font-semibold tracking-[-.015em] text-ink">{title}</h3>
+      <p className="mt-1.5 max-w-[40ch] text-[12px] leading-relaxed text-muted">{description}</p>
       {action ? <div className="mt-4">{action}</div> : null}
     </div>
   );
@@ -228,11 +230,11 @@ export function PanelSkeleton({ rows = 4 }: { rows?: number }) {
 
 export function SectionTitle({ eyebrow, title, description, action }: { eyebrow?: string; title: string; description?: string; action?: ReactNode }) {
   return (
-    <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-      <div>
-        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[.12em] text-muted">{eyebrow || "Ruang kerja"}</p>
-        <h1 className="text-[21px] font-semibold tracking-[-.025em] text-ink sm:text-[25px]">{title}</h1>
-        {description ? <p className="mt-1.5 max-w-[68ch] text-[12.5px] leading-relaxed text-muted">{description}</p> : null}
+    <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div className="min-w-0">
+        <p className="mb-1 text-[10px] font-bold uppercase tracking-[.16em] text-subtle">{eyebrow || "Ruang kerja"}</p>
+        <h1 className="text-[22px] font-semibold tracking-[-.028em] text-ink sm:text-[26px]">{title}</h1>
+        {description ? <p className="mt-1.5 max-w-[74ch] text-[12px] leading-relaxed text-muted">{description}</p> : null}
       </div>
       {action}
     </div>
@@ -249,14 +251,14 @@ export function LinkButton({ children, onClick }: { children: ReactNode; onClick
 
 export function SegmentedControl<T extends string>({ options, value, onChange, label }: { options: { value: T; label: string }[]; value: T; onChange: (v: T) => void; label?: string }) {
   return (
-    <div role="tablist" aria-label={label} className="inline-flex overflow-hidden rounded-[var(--radius-control)] border border-line-strong bg-surface">
+    <div role="tablist" aria-label={label} className="inline-flex shrink-0 gap-0.5 rounded-[var(--radius-control)] border border-line bg-paper-2 p-0.5">
       {options.map((o) => (
         <button
           key={o.value}
           role="tab"
           aria-selected={value === o.value}
           onClick={() => onChange(o.value)}
-          className={`h-8 border-r border-line px-3 text-[11.5px] font-semibold transition-colors last:border-r-0 ${value === o.value ? "bg-ink text-white" : "text-muted hover:bg-paper-2"}`}
+          className={`h-7 whitespace-nowrap rounded-[var(--radius-control-sm)] px-2.5 text-[11.5px] font-semibold transition-[background-color,color,box-shadow] ${value === o.value ? "bg-surface text-ink shadow-[var(--shadow-e1)]" : "text-muted hover:text-ink"}`}
         >
           {o.label}
         </button>

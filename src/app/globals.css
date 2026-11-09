@@ -47,66 +47,72 @@
 }
 
 @theme {
-  /* Ink & neutral */
-  --color-ink: #131c17;
-  --color-ink-900: #0e1512;
-  --color-ink-800: #131c17;
-  --color-ink-700: #1c2822;
-  --color-ink-600: #2a3831;
-  --color-ink-500: #3d4c45;
-  --color-ink-soft: #28372f;
+  /* Ink & neutral — v2 "Signal": tinta sedikit lebih dalam, rail lebih gelap */
+  --color-ink: #0d1310;
+  --color-ink-900: #0b100d;
+  --color-ink-800: #101815;
+  --color-ink-700: #16201b;
+  --color-ink-600: #1d2922;
+  --color-ink-500: #33423a;
+  --color-ink-soft: #1d2922;
 
   /* Paper & surface */
-  --color-paper: #f6f6f2;
-  --color-paper-2: #f1f2ec;
+  --color-paper: #fbfbf8;
+  --color-paper-2: #f3f4ee;
   --color-surface: #ffffff;
-  --color-sunken: #fafaf6;
+  --color-sunken: #f7f8f2;
 
   /* Lines */
-  --color-line: #e3e5de;
-  --color-line-strong: #cfd3c9;
-  --color-hairline: #edefe8;
+  --color-line: #e2e5db;
+  --color-line-strong: #ced3c6;
+  --color-hairline: #eef0e8;
 
   /* Text */
-  --color-muted: #525c55;
-  --color-subtle: #6a756e;
+  --color-muted: #66736b;
+  --color-subtle: #8a958d;
 
   /* Accent */
-  --color-lime: #c6f24e;
-  --color-lime-bright: #b4e635;
-  --color-lime-soft: #eefbd0;
+  --color-lime: #bef264;
+  --color-lime-bright: #a9e04a;
+  --color-lime-soft: #eefbcf;
 
   /* Semantic pairs */
-  --color-ok: #17603c;
-  --color-ok-bg: #e8f5ec;
-  --color-ok-line: #c6e6d2;
+  --color-ok: #146c47;
+  --color-ok-bg: #e7f4ec;
+  --color-ok-line: #bfe2cd;
   --color-warn: #8a4b00;
-  --color-warn-bg: #fdf1dc;
-  --color-warn-line: #f0dcb8;
-  --color-danger: #a2261c;
-  --color-danger-bg: #fbeae8;
-  --color-danger-line: #f2cdc8;
-  --color-info: #1f4e79;
-  --color-info-bg: #e7f0f8;
-  --color-info-line: #c9dcec;
+  --color-warn-bg: #fdf0d8;
+  --color-warn-line: #eed9b2;
+  --color-danger: #a3271b;
+  --color-danger-bg: #fbe9e7;
+  --color-danger-line: #f1cbc6;
+  --color-info: #1d4e73;
+  --color-info-bg: #e5eff7;
+  --color-info-line: #c6dbea;
   --color-neutral: #4a5650;
   --color-neutral-bg: #eff1ec;
   --color-neutral-line: #dfe2d9;
+  /* Penanda risiko jadwal — dipakai bilah & lencana AT_RISK */
+  --color-risk: #c8871f;
+  --color-risk-bg: #fdf3e2;
+  --color-risk-line: #eedcbb;
 
   /* Type */
   --font-sans: "Instrument Sans", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-display: "Instrument Sans", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  /* Radius — satu sistem */
+  /* Radius — satu sistem: 4 kontrol kecil, 6 kontrol, 10 kartu, 14 overlay */
   --radius-control: 6px;
+  --radius-control-sm: 4px;
   --radius-card: 10px;
   --radius-overlay: 14px;
+  --radius-pill: 999px;
 
   /* Elevation — diwarnai ink, bukan hitam */
-  --shadow-e1: 0 1px 2px rgba(19, 28, 23, .06);
-  --shadow-e2: 0 4px 12px -2px rgba(19, 28, 23, .10), 0 1px 3px rgba(19, 28, 23, .05);
-  --shadow-e3: 0 16px 40px -12px rgba(19, 28, 23, .18), 0 4px 12px -4px rgba(19, 28, 23, .08);
+  --shadow-e1: 0 1px 2px rgba(13, 19, 16, .05);
+  --shadow-e2: 0 3px 10px -3px rgba(13, 19, 16, .10), 0 1px 2px rgba(13, 19, 16, .05);
+  --shadow-e3: 0 18px 44px -16px rgba(13, 19, 16, .22), 0 4px 12px -6px rgba(13, 19, 16, .10);
 
   /* Control heights */
   --spacing-control-sm: 32px;
@@ -157,9 +163,74 @@ p { text-wrap: pretty; }
 }
 .lime-underline { box-shadow: inset 0 -2px 0 var(--color-lime-bright); }
 
+/* ============================================================
+   v2 "Signal" — utilitas bersama
+   ============================================================ */
+
+/* Pita kinerja: blok tinta gelap sebagai pusat perhatian per layar */
+.band {
+  border-radius: var(--radius-card);
+  background: var(--color-ink);
+  color: #cfd8d2;
+  background-image: linear-gradient(180deg, rgba(190,242,100,.05), transparent 65%);
+}
+.band .band-k {
+  font-size: 10px; font-weight: 700; letter-spacing: .14em;
+  text-transform: uppercase; color: #7d8a83;
+}
+.band .band-v {
+  margin-top: 4px; color: #fff; font-weight: 650;
+  letter-spacing: -.028em; font-variant-numeric: tabular-nums;
+  font-size: clamp(19px, 1.6vw, 25px); line-height: 1.1;
+}
+.band .band-f { margin-top: 3px; font-size: 10.5px; color: #98a49d; }
+.band .band-f b { color: #cfd8d2; font-weight: 650; }
+
+/* Bilah meter: satu komponen untuk anggaran, progres, termin */
+.meter { display: flex; height: 5px; overflow: hidden; border-radius: var(--radius-pill); background: var(--color-paper-2); }
+.meter > i { display: block; height: 100%; background: var(--color-lime); }
+.meter > i[data-tone="warn"] { background: var(--color-risk); }
+.meter > i[data-tone="bad"] { background: #cf5a4b; }
+.meter > i[data-tone="ok"] { background: var(--color-ok); }
+.meter > i[data-tone="pending"] { background: #c9cfc6; }
+.meter > i[data-tone="ink"] { background: var(--color-ink); }
+
+/* Bilah ganda: progres fisik vs anggaran terpakai */
+.duo-bar { display: grid; grid-template-columns: 34px 1fr; gap: 8px; align-items: center; }
+.duo-bar .v { font-size: 10px; color: var(--color-muted); font-variant-numeric: tabular-nums; }
+
+/* Pita tahap proyek */
+.stageband { display: flex; align-items: flex-start; gap: 0; }
+.stageband > div { flex: 1; min-width: 0; position: relative; padding-top: 14px; }
+.stageband > div::before { content: ""; position: absolute; top: 5px; left: 0; right: 0; height: 2px; background: var(--color-line); }
+.stageband > div[data-state="done"]::before { background: var(--color-ink); }
+.stageband > div[data-state="now"]::before { background: var(--color-lime); }
+.stageband > div[data-state="now"]::after {
+  content: ""; position: absolute; top: 1px; left: 0; width: 10px; height: 10px;
+  border-radius: 50%; background: var(--color-lime); border: 2px solid var(--color-surface);
+}
+.stageband .st-label {
+  display: block; font-size: 10px; line-height: 1.25; color: var(--color-subtle);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 6px;
+}
+.stageband > div[data-state="done"] .st-label { color: var(--color-ink); font-weight: 600; }
+.stageband > div[data-state="now"] .st-label { color: var(--color-ink); font-weight: 700; }
+
+/* Baris data padat untuk daftar panjang */
+.dense-row { display: grid; align-items: center; gap: 12px; border-bottom: 1px solid var(--color-hairline); }
+.dense-row:last-child { border-bottom: 0; }
+.dense-row:hover { background: var(--color-paper); }
+
+/* Kartu dengan garis kiri sebagai penanda status */
+.edge { border-left: 2px solid var(--color-line-strong); }
+.edge[data-tone="danger"] { border-left-color: #cf5a4b; }
+.edge[data-tone="warn"] { border-left-color: var(--color-risk); }
+.edge[data-tone="ok"] { border-left-color: var(--color-ok); }
+.edge[data-tone="signal"] { border-left-color: var(--color-lime); }
+
 /* Skeleton loading (bentuk mengikuti konten, bukan spinner) */
 .skeleton {
-  background: linear-gradient(90deg, #f1f2ec 25%, #e9ebe4 37%, #f1f2ec 63%);
+  background: linear-gradient(90deg, #f3f4ee 25%, #e8eade 37%, #f3f4ee 63%);
   background-size: 400% 100%;
   animation: skeleton-shimmer 1.4s ease-in-out infinite;
   border-radius: var(--radius-control);

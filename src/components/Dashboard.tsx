@@ -38,8 +38,9 @@ export default function Dashboard({ data, onOpenProject, onCreateExpense, onNavi
     <div>
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-[21px] font-semibold tracking-[-.025em] sm:text-[25px]">Ikhtisar portofolio</h1>
-          <p className="mt-1 text-[12.5px] text-muted">{projects.length} proyek · data per {formatDate(new Date())}, {new Intl.DateTimeFormat("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" }).format(new Date())} WIB</p>
+          <p className="mb-1 text-[10px] font-bold uppercase tracking-[.16em] text-subtle">Portofolio</p>
+          <h1 className="text-[22px] font-semibold tracking-[-.028em] sm:text-[26px]">Ikhtisar portofolio</h1>
+          <p className="mt-1 text-[11.5px] text-muted">{projects.length} proyek dalam cakupan · data per {formatDate(new Date())}, {new Intl.DateTimeFormat("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" }).format(new Date())} WIB</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <SegmentedControl label="Cakupan proyek" value={scope} onChange={setScope} options={[{ value: "all", label: "Semua" }, { value: "running", label: "Berjalan" }]} />
@@ -47,29 +48,37 @@ export default function Dashboard({ data, onOpenProject, onCreateExpense, onNavi
         </div>
       </div>
 
-      {/* Baris KPI */}
-      <div className="grid overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface sm:grid-cols-2 xl:grid-cols-4">
-        <div className="border-b border-hairline p-4 xl:border-b-0 xl:border-r">
-          <p className="text-[11.5px] font-semibold text-muted">Biaya aktual</p>
-          <p className="mt-1.5 text-[22px] font-semibold tracking-[-.025em] tabular sm:text-[25px]">{formatIDR(actual.toFixed(2), true)}</p>
-          <p className="mt-1 text-[11.5px] text-muted">dari kontrak {formatIDR(contract.toFixed(2), true)}</p>
+      {/* Pita kinerja: satu blok tinta sebagai pusat perhatian layar ini */}
+      <section className="band overflow-hidden">
+        <div className="grid grid-cols-2 divide-line/0 lg:grid-cols-4">
+          <div className="border-b border-white/[.07] p-4 lg:border-b-0 lg:border-r">
+            <p className="band-k">Kontrak berjalan</p>
+            <p className="band-v">{formatIDR(contract.toFixed(2), true)}</p>
+            <p className="band-f">{projects.length} proyek · termasuk CO disetujui</p>
+          </div>
+          <div className="border-b border-white/[.07] p-4 lg:border-b-0 lg:border-r">
+            <p className="band-k">Biaya aktual</p>
+            <p className="band-v">{formatIDR(actual.toFixed(2), true)} <span className="text-[12px] font-medium text-[#98a49d]">{contract.gt(0) ? `${actual.div(contract).times(100).toFixed(1)}%` : ""}</span></p>
+            <p className="band-f">{pending.length ? <><b>{pending.length} pengajuan</b> menunggu persetujuan</> : "seluruh biaya sudah final"}</p>
+          </div>
+          <div className="border-b border-white/[.07] p-4 sm:border-b-0 lg:border-r">
+            <p className="band-k">Piutang</p>
+            <p className="band-v">{formatIDR(receivable.toFixed(2), true)}</p>
+            <p className="band-f">{overdue.gt(0) ? <span className="font-semibold text-[#ff9d8f]">{formatIDR(overdue.toFixed(2), true)} lewat jatuh tempo</span> : "tidak ada yang terlambat"}</p>
+          </div>
+          <div className="p-4">
+            <p className="band-k">Sisa komitmen PO</p>
+            <p className="band-v">{formatIDR(openCommitment.toFixed(2), true)}</p>
+            <p className="band-f">margin indikatif <b>{formatIDR(margin.toFixed(2), true)}</b> · {marginPct.toFixed(1)}%</p>
+          </div>
         </div>
-        <div className="border-b border-hairline p-4 xl:border-b-0 xl:border-r">
-          <p className="text-[11.5px] font-semibold text-muted">Piutang</p>
-          <p className="mt-1.5 text-[22px] font-semibold tracking-[-.025em] tabular sm:text-[25px]">{formatIDR(receivable.toFixed(2), true)}</p>
-          <p className="mt-1 text-[11.5px] text-muted">{overdue.gt(0) ? <><strong className="font-semibold text-danger">{formatIDR(overdue.toFixed(2), true)}</strong> lewat jatuh tempo</> : "tidak ada yang terlambat"}</p>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-white/[.07] px-4 py-2 text-[10px] text-[#7d8a83]">
+          <span className="flex items-center gap-1.5"><span className="h-[5px] w-[5px] rounded-full bg-lime" />{projects.length} proyek berjalan</span>
+          <span className="flex items-center gap-1.5"><span className="h-[5px] w-[5px] rounded-full bg-[#ff9d8f]" />{overdueInvoices.length} invoice terlambat</span>
+          <span className="flex items-center gap-1.5"><span className="h-[5px] w-[5px] rounded-full bg-[#c9cfc6]" />{data.expenses.length} nota tercatat</span>
+          <span className="ml-auto mono hidden sm:inline">sumber: data proyek dalam cakupan Anda</span>
         </div>
-        <div className="border-b border-hairline p-4 sm:border-b-0 sm:border-r">
-          <p className="text-[11.5px] font-semibold text-muted">Sisa komitmen PO</p>
-          <p className="mt-1.5 text-[22px] font-semibold tracking-[-.025em] tabular sm:text-[25px]">{formatIDR(openCommitment.toFixed(2), true)}</p>
-          <p className="mt-1 text-[11.5px] text-muted">belum ditagihkan supplier</p>
-        </div>
-        <div className="p-4">
-          <p className="text-[11.5px] font-semibold text-muted">Margin indikatif</p>
-          <p className={`mt-1.5 text-[22px] font-semibold tracking-[-.025em] tabular sm:text-[25px] ${margin.lt(0) ? "text-danger" : ""}`}>{formatIDR(margin.toFixed(2), true)}</p>
-          <p className="mt-1 text-[11.5px] text-muted"><strong className={`font-semibold ${marginPct < 10 ? "text-danger" : "text-ok"}`}>{marginPct.toFixed(1)}%</strong> terhadap nilai kontrak</p>
-        </div>
-      </div>
+      </section>
 
       {/* Perlu tindakan + portofolio */}
       <div className="mt-4 grid gap-4 xl:grid-cols-[1.3fr_1fr]">
@@ -82,11 +91,10 @@ export default function Dashboard({ data, onOpenProject, onCreateExpense, onNavi
             <ul>
               {actions.map((a) => (
                 <li key={a.id}>
-                  <button onClick={() => onNavigate(a.view)} className="flex w-full items-center gap-3 border-b border-hairline px-4 py-2.5 text-left last:border-0 hover:bg-paper">
-                    <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-[var(--radius-control)] ${a.tone === "danger" ? "bg-danger-bg text-danger" : "bg-warn-bg text-warn"}`}><a.icon size={14} /></span>
+                  <button onClick={() => onNavigate(a.view)} className="edge flex w-full items-center gap-3 border-b border-hairline py-2.5 pl-3 pr-4 text-left last:border-0 hover:bg-paper" data-tone={a.tone === "danger" ? "danger" : "warn"}>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[12.5px] font-semibold">{a.title}</span>
-                      <span className="mt-0.5 block truncate text-[11.5px] text-muted">{a.meta}</span>
+                      <span className="block truncate text-[12px] font-semibold">{a.title}</span>
+                      <span className="mt-0.5 block truncate text-[11px] text-muted">{a.meta}</span>
                     </span>
                     <Badge value={a.badge} />
                   </button>
@@ -189,12 +197,12 @@ function PortfolioRow({ project, data, onClick }: { project: ProjectView; data: 
       </div>
       <div className="mt-2.5 grid grid-cols-2 gap-x-4 gap-y-1.5">
         <div>
-          <div className="flex items-baseline justify-between text-[11px] text-muted"><span>Progres fisik</span><span className="mono font-semibold text-ink">{progress}%</span></div>
-          <div className="mt-1 h-[5px] overflow-hidden rounded-full bg-paper-2"><div className="h-full rounded-full bg-ink" style={{ width: `${Math.min(100, progress)}%` }} /></div>
+          <div className="flex items-baseline justify-between text-[10.5px] text-muted"><span>Progres fisik</span><span className="mono font-semibold text-ink">{progress}%</span></div>
+          <div className="meter mt-1"><i data-tone="ink" style={{ width: `${Math.min(100, progress)}%` }} /></div>
         </div>
         <div>
-          <div className="flex items-baseline justify-between text-[11px] text-muted"><span>Anggaran terpakai</span><span className={`mono font-semibold ${used > 100 ? "text-danger" : used > 90 ? "text-warn" : "text-ink"}`}>{used.toFixed(0)}%</span></div>
-          <div className="mt-1 h-[5px] overflow-hidden rounded-full bg-paper-2"><div className={`h-full rounded-full ${used > 100 ? "bg-danger" : used > 90 ? "bg-warn" : "bg-ink-500"}`} style={{ width: `${Math.min(100, used)}%` }} /></div>
+          <div className="flex items-baseline justify-between text-[10.5px] text-muted"><span>Anggaran terpakai</span><span className={`mono font-semibold ${used > 100 ? "text-danger" : used > 90 ? "text-warn" : "text-ink"}`}>{used.toFixed(0)}%</span></div>
+          <div className="meter mt-1"><i data-tone={used > 100 ? "bad" : used > 90 ? "warn" : "pending"} style={{ width: `${Math.min(100, used)}%` }} /></div>
         </div>
       </div>
     </button>

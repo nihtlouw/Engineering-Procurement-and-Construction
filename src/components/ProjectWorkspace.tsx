@@ -20,12 +20,12 @@ export default function ProjectWorkspace(props: Props) {
       <div className="flex flex-col gap-3 px-4 pb-3 pt-4 lg:flex-row lg:items-start lg:justify-between lg:px-5">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="mono text-[11px] text-muted">{project.code}</span>
+            <span className="mono text-[10.5px] uppercase tracking-[.08em] text-subtle">{project.code}</span>
             <Badge value={project.stage} />
             {project.isLocked ? <Badge value="LOCKED" label="Terkunci" tone="neutral" /> : null}
           </div>
-          <h1 className="mt-1.5 text-[19px] font-semibold tracking-[-.025em] sm:text-[21px]">{project.title}</h1>
-          <p className="mt-0.5 truncate text-[12px] text-muted">{project.clientName}{project.siteName ? ` · ${project.siteName}` : ""}</p>
+          <h1 className="mt-1 text-[20px] font-semibold tracking-[-.028em] sm:text-[23px]">{project.title}</h1>
+          <p className="mt-0.5 truncate text-[11.5px] text-muted">{project.clientName}{project.siteName ? ` · ${project.siteName}` : ""}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {data.user.permissions.includes("progress.create") ? <Button variant="secondary" size="sm" onClick={() => onTab("schedule")}><TrendingUp size={14} />Update lapangan</Button> : null}
@@ -34,9 +34,9 @@ export default function ProjectWorkspace(props: Props) {
       </div>
       <div className="scrollbar-none flex overflow-x-auto px-3">
         {tabs.map((t) => (
-          <button key={t.id} onClick={() => onTab(t.id)} aria-current={tab === t.id ? "page" : undefined} className={`relative h-9 whitespace-nowrap px-2.5 text-[12px] font-semibold transition-colors ${tab === t.id ? "text-ink" : "text-muted hover:text-ink"}`}>
+          <button key={t.id} onClick={() => onTab(t.id)} aria-current={tab === t.id ? "page" : undefined} className={`relative h-9 whitespace-nowrap px-2.5 text-[11.5px] font-semibold transition-colors ${tab === t.id ? "text-ink" : "text-muted hover:text-ink"}`}>
             {t.label}
-            {tab === t.id ? <span className="absolute inset-x-2.5 bottom-0 h-[2px] rounded-t bg-ink" /> : null}
+            {tab === t.id ? <span className="absolute inset-x-2 bottom-0 h-[2px] rounded-t bg-ink" /> : null}
           </button>
         ))}
       </div>
@@ -64,27 +64,23 @@ function Summary(props: Props) {
           {next && data.user.permissions.includes("schedule.edit") ? <Button variant="lime" size="sm" loading={loading} onClick={() => void advance()}>Ajukan tahap berikutnya<ArrowRight size={14} /></Button> : null}
         </div>
       </div>
-      <div className="px-4 py-4">
-        <div className="flex items-center">
+      <div className="px-4 pb-3.5 pt-3">
+        <div className="stageband">
           {STAGES.map((stage, i) => (
-            <div key={stage} className={`flex items-center ${i < STAGES.length - 1 ? "flex-1" : ""}`}>
-              <div className="relative flex flex-col items-center">
-                <span className={`grid h-[18px] w-[18px] place-items-center rounded-full border text-[11px] font-bold ${i < index ? "border-ink bg-ink text-lime" : i === index ? "border-lime-bright bg-lime text-ink" : "border-line-strong bg-surface text-subtle"}`}>{i < index ? "✓" : i + 1}</span>
-                <span className={`absolute top-6 hidden w-24 text-center text-[11px] leading-tight sm:block ${i === index ? "font-semibold text-ink" : "text-muted"}`}>{LABELS[stage]}</span>
-              </div>
-              {i < STAGES.length - 1 ? <div className="mx-1 h-[1.5px] flex-1 rounded-full bg-line"><div className={`h-[1.5px] rounded-full bg-ink transition-[width] duration-300 ${i < index ? "w-full" : "w-0"}`} /></div> : null}
+            <div key={stage} data-state={i < index ? "done" : i === index ? "now" : "next"}>
+              <span className="st-label">{LABELS[stage]}</span>
             </div>
           ))}
         </div>
-        <div className="mt-8 flex items-center gap-2 text-[11.5px] text-muted sm:mt-9">
-          <span className="h-[5px] flex-1 overflow-hidden rounded-full bg-paper-2"><span className="block h-full rounded-full bg-ink" style={{ width: `${Math.min(100, m?.progressPct || 0)}%` }} /></span>
-          <span>{STAGES.length} tahap · {index + 1} berjalan</span>
+        <div className="mt-3 flex items-center gap-2.5">
+          <div className="meter flex-1"><i data-tone="ink" style={{ width: `${Math.min(100, m?.progressPct || 0)}%` }} /></div>
+          <span className="text-[10.5px] text-muted">tahap {index + 1} dari {STAGES.length} · progres {m?.progressPct ?? 0}% terbobot</span>
         </div>
       </div>
       {error ? <p className="border-t border-danger-line bg-danger-bg px-4 py-2 text-[11.5px] text-danger">{error}</p> : null}
     </section>
     <div className="grid overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface sm:grid-cols-2 xl:grid-cols-3">
-      {cards.map((card) => <div key={card.label} className="border-b border-hairline p-3.5 sm:border-r sm:[&:nth-child(2n)]:border-r-0 xl:[&:nth-child(2n)]:border-r xl:[&:nth-child(3n)]:border-r-0"><p className="text-[11.5px] font-semibold text-muted">{card.label}</p><p className="mono mt-1 text-[18px] font-semibold tracking-[-.02em] tabular">{formatIDR(card.value, true)}</p><p className="mt-0.5 text-[11px] leading-relaxed text-muted">{card.sub}</p></div>)}
+      {cards.map((card) => <div key={card.label} className="border-b border-hairline p-3.5 sm:border-r sm:[&:nth-child(2n)]:border-r-0 xl:[&:nth-child(2n)]:border-r xl:[&:nth-child(3n)]:border-r-0"><p className="text-[10px] font-semibold uppercase tracking-[.1em] text-subtle">{card.label}</p><p className="mono mt-1 text-[19px] font-semibold tracking-[-.028em] tabular">{formatIDR(card.value, true)}</p><p className="mt-0.5 text-[11px] leading-relaxed text-muted">{card.sub}</p></div>)}
     </div>
     <div className="grid gap-4 lg:grid-cols-[1.2fr_.8fr]"><section className="rounded-[var(--radius-card)] border border-line bg-surface p-4"><h2 className="text-sm font-semibold">Informasi kontrak & pelaksanaan</h2><dl className="mt-5 grid gap-x-6 gap-y-4 text-xs sm:grid-cols-2">{[["Nomor kontrak", project.contractNumber], ["Tanggal kontrak", formatDate(project.contractDate)], ["Project Manager", project.pmName], ["Mulai", formatDate(project.startDate)], ["Target selesai", formatDate(project.targetEndDate)], ["BAST 1", formatDate(project.bast1Date)], ["BAST 2", formatDate(project.bast2Date)], ["Masa garansi", `${project.warrantyMonths} bulan`]].map(([label, value]) => <div key={label}><dt className="text-muted">{label}</dt><dd className="mt-1 font-semibold">{value || "—"}</dd></div>)}</dl><div className="mt-6 border-t border-line pt-4"><p className="text-xs font-semibold">Tim proyek</p><div className="mt-3 flex flex-wrap gap-2">{data.members.filter((mem) => mem.projectId === project.id).map((mem) => <span key={String(mem.id)} className="rounded-full bg-paper px-3 py-1.5 text-[11px]">{String(mem.userName)} · {String(mem.userRole)}</span>)}</div></div></section><section className="rounded-[var(--radius-card)] border border-line bg-surface p-4"><div className="flex items-center gap-2"><ListChecks size={17} /><h2 className="text-sm font-semibold">Kesiapan penutupan</h2></div><div className="mt-4 space-y-3">{(data.closeChecks[project.id] || []).map((check) => <div key={check.key} className="flex gap-3"><span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full ${check.ok ? "bg-ok-bg text-ok" : "bg-warn-bg text-warn"}`}>{check.ok ? <Check size={12} /> : <AlertTriangle size={11} />}</span><div><p className="text-xs font-semibold">{check.label}</p><p className="mt-0.5 text-[11px] text-muted">{check.detail}</p></div></div>)}</div></section></div>
   </div>;
