@@ -2,11 +2,11 @@
 import { useState } from "react";
 import { AlertTriangle, ArrowRight, CheckCircle2, ClipboardCheck, FileWarning, FolderKanban, Plus, Receipt } from "lucide-react";
 import type { AppData, ProjectView } from "@/components/types";
-import { Badge, Button, EmptyState, SegmentedControl } from "@/components/ui";
+import { Badge, Button, DataTable, EmptyState, SegmentedControl } from "@/components/ui";
 import { D, formatDate, formatIDR, todayJakarta } from "@/lib/format";
 
-/* Ikhtisar portofolio — rencana desain v1 bab 06.
-   Tidak ada hero pemasaran, parallax, atau tombol gulir: yang pertama terlihat adalah pekerjaan. */
+/* Ikhtisar portofolio — desain v2 "Signal": pita kinerja + tabel padat.
+   Tidak ada hero pemasaran atau parallax: yang pertama terlihat adalah pekerjaan. */
 
 export default function Dashboard({ data, onOpenProject, onCreateExpense, onNavigate }: { data: AppData; onOpenProject: (id: string) => void; onCreateExpense: () => void; onNavigate: (view: string) => void }) {
   const [scope, setScope] = useState<"all" | "running">("all");
@@ -123,30 +123,20 @@ export default function Dashboard({ data, onOpenProject, onCreateExpense, onNavi
             <button onClick={() => onNavigate("expenses")} className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-muted hover:text-ink">Buku biaya<ArrowRight size={12} /></button>
           </header>
           {recentExpenses.length ? (
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-[12.5px]">
-                <thead>
-                  <tr className="bg-sunken text-left text-[11px] font-semibold uppercase tracking-[.06em] text-muted">
-                    <th className="px-4 py-2">Kode</th>
-                    <th className="px-3 py-2">Merchant</th>
-                    <th className="px-3 py-2 text-right">Total</th>
-                    <th className="px-3 py-2">Status</th>
-                    <th className="px-4 py-2 text-right">Tanggal</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentExpenses.map((e) => (
-                    <tr key={e.id} className="border-t border-hairline hover:bg-paper">
-                      <td className="mono whitespace-nowrap px-4 py-2.5 text-[11.5px] text-muted">{e.code}</td>
-                      <td className="max-w-[190px] truncate px-3 py-2.5 font-medium">{e.merchantName || "Tanpa merchant"}</td>
-                      <td className="mono whitespace-nowrap px-3 py-2.5 text-right">{formatIDR(e.totalAmount)}</td>
-                      <td className="px-3 py-2.5"><Badge value={e.approvalStatus} /></td>
-                      <td className="mono whitespace-nowrap px-4 py-2.5 text-right text-[11.5px] text-muted">{formatDate(e.transactionDate)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              density="compact"
+              minWidth={560}
+              rows={recentExpenses}
+              rowKey={(e) => e.id}
+              onRowClick={() => onNavigate("expenses")}
+              columns={[
+                { key: "code", header: "Kode", width: "112px", cell: (e) => <span className="mono text-[11px] text-muted">{e.code}</span> },
+                { key: "merchant", header: "Merchant", cell: (e) => <span className="block max-w-[190px] truncate font-medium">{e.merchantName || "Tanpa merchant"}</span> },
+                { key: "total", header: "Total", align: "right", width: "132px", cell: (e) => <span className="mono">{formatIDR(e.totalAmount)}</span> },
+                { key: "status", header: "Status", width: "132px", cell: (e) => <Badge value={e.approvalStatus} /> },
+                { key: "date", header: "Tanggal", align: "right", width: "96px", cell: (e) => <span className="mono text-[11px] text-muted">{formatDate(e.transactionDate)}</span> },
+              ]}
+            />
           ) : <EmptyState icon={<Receipt size={16} />} title="Belum ada pengeluaran" description="Nota lapangan yang dicatat akan tampil di sini beserta status persetujuannya." />}
         </section>
 

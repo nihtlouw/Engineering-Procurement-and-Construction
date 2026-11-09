@@ -4,7 +4,7 @@ import { motion } from "motion/react";
 import { AlertTriangle, ArrowRight, Info, CalendarDays, Check, CheckCircle2, ChevronRight, CircleDollarSign, ClipboardCheck, FilePlus2, Flag, Gauge, ListChecks, Package, Plus, ReceiptText, ShoppingCart, TrendingUp } from "lucide-react";
 import type { AppData, ProjectView, PurchaseView, ScheduleView } from "@/components/types";
 import { DocumentsCenter } from "@/components/DocumentsView";
-import { Badge, Button, EmptyState, Field, Input, Modal, PanelSkeleton, SegmentedControl, Select, TableSkeleton, Textarea } from "@/components/ui";
+import { Badge, Button, DataTable, EmptyState, Field, Input, Modal, PanelSkeleton, SegmentedControl, Select, TableSkeleton, Textarea } from "@/components/ui";
 import { LABELS, STAGES } from "@/lib/domain";
 import { api, uuid } from "@/lib/client";
 import { D, formatDate, formatIDR, todayJakarta } from "@/lib/format";
@@ -100,48 +100,22 @@ function BudgetPanel({ data, project }: Props) {
             <Info size={13} className="mt-0.5 shrink-0" />
             <span>{type === "INTERNAL" ? "Perbandingan memakai DPP tanpa PPN. Bilah berubah warna di atas 90% (warning) dan 100% (danger) dari nilai pos." : "Harga klien terpisah sepenuhnya dari biaya internal. Dokumen klien tidak membaca tabel internal."}</span>
           </div>
-          <div className="overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px] border-collapse text-left text-[12.5px]">
-                <thead>
-                  <tr className="bg-sunken text-[11px] font-semibold uppercase tracking-[.06em] text-muted">
-                    <th className="px-4 py-2.5">Pos pekerjaan</th>
-                    <th className="px-3 py-2.5">Volume</th>
-                    <th className="px-3 py-2.5 text-right">Anggaran</th>
-                    {type === "INTERNAL" ? <><th className="px-3 py-2.5 text-right">Aktual</th><th className="px-3 py-2.5 text-right">Pending</th><th className="px-3 py-2.5 text-right">Sisa</th><th className="w-[130px] px-4 py-2.5">Terpakai</th></> : null}
-                  </tr>
-                </thead>
-                <tbody>
-                  {active.lines.map((line) => {
-                    const used = D(line.actualAmount || 0);
-                    const pct = D(line.total).gt(0) ? used.div(line.total).times(100).toNumber() : 0;
-                    const remaining = D(line.total).minus(used);
-                    return (
-                      <tr key={line.id} className="border-t border-hairline hover:bg-paper">
-                        <td className="max-w-md px-4 py-2.5">
-                          <p className="font-semibold"><span className="mono text-[11.5px] text-muted">{line.code}</span> {line.description}</p>
-                          <p className="mt-0.5 text-[11px] text-muted">{line.categoryCode} · {line.categoryName}</p>
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-2.5 text-muted">{line.quantity} {line.unitCode}</td>
-                        <td className="mono whitespace-nowrap px-3 py-2.5 text-right font-semibold">{formatIDR(line.total)}</td>
-                        {type === "INTERNAL" ? (
-                          <>
-                            <td className="mono whitespace-nowrap px-3 py-2.5 text-right">{formatIDR(line.actualAmount)}</td>
-                            <td className="mono whitespace-nowrap px-3 py-2.5 text-right text-warn">{formatIDR(line.pendingAmount)}</td>
-                            <td className={`mono whitespace-nowrap px-3 py-2.5 text-right ${remaining.lt(0) ? "font-semibold text-danger" : ""}`}>{formatIDR(remaining.toFixed(2))}</td>
-                            <td className="px-4 py-2.5">
-                              <div className="h-[5px] overflow-hidden rounded-full bg-paper-2"><div className={`h-full rounded-full ${pct > 100 ? "bg-danger" : pct > 90 ? "bg-warn" : "bg-ink-500"}`} style={{ width: `${Math.min(100, pct)}%` }} /></div>
-                              <p className={`mono mt-1 text-[11px] ${pct > 100 ? "font-semibold text-danger" : pct > 90 ? "font-semibold text-warn" : "text-muted"}`}>{pct.toFixed(0)}%</p>
-                            </td>
-                          </>
-                        ) : null}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <DataTable
+            rows={active.lines}
+            rowKey={(line) => line.id}
+            rowClassName={(line) => (D(line.actualAmount || 0).gt(line.total) ? "bg-danger-bg/45" : "")}
+            columns={[
+              { key: "line", header: "Pos pekerjaan", width: "40%", cell: (line) => <><p className="font-semibold"><span className="mono text-[11px] text-muted">{line.code}</span> {line.description}</p><p className="mt-0.5 text-[11px] text-muted">{line.categoryCode} · {line.categoryName}</p></> },
+              { key: "qty", header: "Volume", width: "110px", cell: (line) => <span className="whitespace-nowrap text-muted">{line.quantity} {line.unitCode}</span> },
+              { key: "budget", header: "Anggaran", align: "right", width: "132px", cell: (line) => <span className="mono font-semibold">{formatIDR(line.total)}</span> },
+              ...(type === "INTERNAL" ? [
+                { key: "actual", header: "Aktual", align: "right" as const, width: "130px", cell: (line: typeof active.lines[number]) => <span className="mono">{formatIDR(line.actualAmount)}</span> },
+                { key: "pending", header: "Pending", align: "right" as const, width: "130px", cell: (line: typeof active.lines[number]) => <span className="mono text-risk">{formatIDR(line.pendingAmount)}</span> },
+                { key: "remaining", header: "Sisa", align: "right" as const, width: "130px", cell: (line: typeof active.lines[number]) => { const rest = D(line.total).minus(D(line.actualAmount || 0)); return <span className={`mono ${rest.lt(0) ? "font-semibold text-danger" : ""}`}>{formatIDR(rest.toFixed(2))}</span>; } },
+                { key: "used", header: "Terpakai", width: "110px", cell: (line: typeof active.lines[number]) => { const pct = D(line.total).gt(0) ? D(line.actualAmount || 0).div(line.total).times(100).toNumber() : 0; return <><div className="meter"><i data-tone={pct > 100 ? "bad" : pct > 90 ? "warn" : "ink"} style={{ width: `${Math.min(100, pct)}%` }} /></div><p className={`mono mt-1 text-[10.5px] ${pct > 100 ? "font-semibold text-danger" : pct > 90 ? "font-semibold text-risk" : "text-muted"}`}>{pct.toFixed(0)}%</p></>; } },
+              ] : []),
+            ]}
+          />
           {versions.length > 1 ? <div className="mt-3 flex flex-wrap items-center gap-1.5"><span className="text-[11px] text-muted">Versi lain:</span>{versions.map((v) => <span key={v.id} className="rounded-full border border-line bg-surface px-2.5 py-1 text-[11px] text-muted">v{v.versionNo} · {LABELS[v.status] || v.status} · {formatIDR(v.total, true)}</span>)}</div> : null}
         </>
       )}
