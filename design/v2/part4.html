@@ -1,0 +1,373 @@
+  <!-- ============================================================ 09 -->
+  <section class="chapter" id="s09">
+    <div class="chapter-head">
+      <span class="num">09</span>
+      <h2>Tagihan &amp; piutang lintas proyek</h2>
+      <span class="note">Halaman finance: semua invoice, aging piutang, dan potongan pajak.</span>
+    </div>
+    <p>Menu Tagihan dipakai finance setiap hari, bukan per proyek. Karena itu bentuknya satu tabel panjang dengan kolom saldo dan aging, ditambah panel kanan untuk rekonsiliasi cepat: mana yang harus ditelepon hari ini.</p>
+
+    <div class="screens">
+      <figure class="screen">
+        <div class="screen-bar"><div class="dots"><i></i><i></i><i></i></div><div class="url">ardaya.app/#/invoices</div><span class="badge">Tagihan</span><span class="label">Finance</span></div>
+        <div class="viewport" data-w="1440">
+          <div class="canvas" data-nav="invoices" data-crumb="Tagihan">
+            <div class="body">
+              <div class="pagehead">
+                <div><h3>Tagihan klien</h3><p class="sub">Saldo dihitung dari total invoice dikurangi kas diterima dan potongan PPh.</p></div>
+                <div class="actions"><span class="btn">Catat pembayaran</span><span class="btn lime">Buat invoice</span></div>
+              </div>
+
+              <div class="grid g4" style="margin-top:14px">
+                <div class="card metric"><div class="k">Total ditagih</div><div class="v">Rp 2,87 M</div><div class="f">6 invoice aktif</div></div>
+                <div class="card metric"><div class="k">Terlambat</div><div class="v" style="color:var(--danger)">Rp 538 jt</div><div class="f">1 invoice · 26 hari</div></div>
+                <div class="card metric"><div class="k">Jatuh tempo 7 hari</div><div class="v">Rp 914 jt</div><div class="f">1 invoice · 15 Nov</div></div>
+                <div class="card metric"><div class="k">PPh dipotong</div><div class="v">Rp 18,8 jt</div><div class="f">PPh 23 &amp; 22 tahun ini</div></div>
+              </div>
+
+              <div class="grid g-2-1" style="margin-top:12px">
+                <div class="card">
+                  <div class="hd"><h4>Semua invoice</h4><span class="more">terbaru di atas</span></div>
+                  <table class="tbl">
+                    <tr><th>Nomor</th><th>Proyek</th><th>Termin</th><th class="r">DPP + PPN</th><th class="r">Saldo</th><th>Status</th></tr>
+                    <tr style="background:#fdf7f6"><td class="code">096/INV/EPC/X/2026</td><td>PRJ-2026-014</td><td>Progres 20%</td><td class="r mono">538.350.000</td><td class="r mono">538.350.000</td><td><span class="pill bad"><i></i>Terlambat</span></td></tr>
+                    <tr><td class="code">087/INV/EPC/IX/2026</td><td>PRJ-2026-014</td><td>MOS 40%</td><td class="r mono">2.153.400.000</td><td class="r mono">914.600.000</td><td><span class="pill warn"><i></i>Sebagian</span></td></tr>
+                    <tr><td class="code">041/INV/EPC/VI/2026</td><td>PRJ-2026-014</td><td>DP 30%</td><td class="r mono">1.615.050.000</td><td class="r mono">0</td><td><span class="pill ok"><i></i>Lunas</span></td></tr>
+                    <tr><td class="code">019/INV/EPC/III/2026</td><td>PRJ-2025-009</td><td>Final</td><td class="r mono">466.200.000</td><td class="r mono">0</td><td><span class="pill ok"><i></i>Lunas</span></td></tr>
+                    <tr><td class="code">RET-009-01</td><td>PRJ-2025-009</td><td>Retensi 5%</td><td class="r mono">84.000.000</td><td class="r mono">84.000.000</td><td><span class="pill info"><i></i>Ditahan</span></td></tr>
+                  </table>
+                </div>
+
+                <div style="display:flex;flex-direction:column;gap:12px">
+                  <div class="card">
+                    <div class="hd"><h4>Aging piutang</h4><span class="more">hari berjalan</span></div>
+                    <div class="bd">
+                      <div class="aging2">
+                        <div class="a"><span class="hint">0–30</span><div class="b"><i style="width:70%;background:var(--ok)"></i></div><b class="mono">914,6 jt</b></div>
+                        <div class="a"><span class="hint">31–60</span><div class="b"><i style="width:42%;background:#e3a33a"></i></div><b class="mono">538,4 jt</b></div>
+                        <div class="a"><span class="hint">&gt;60</span><div class="b"><i style="width:6%;background:#cf5a4b"></i></div><b class="mono">0</b></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="card">
+                    <div class="hd"><h4>Hari ini</h4><span class="more">3 hal</span></div>
+                    <div class="rows">
+                      <div class="rowitem bad"><span class="tick"></span><div><div class="t">Tagih 096 · 26 hari</div><div class="m">PT Arunika · kontak Bu Rina</div></div></div>
+                      <div class="rowitem warn"><span class="tick"></span><div><div class="t">Konfirmasi PPh 23 invoice 087</div><div class="m">bukti potong belum diterima</div></div></div>
+                      <div class="rowitem"><span class="tick"></span><div><div class="t">Reimburse Candra Rp 12,4 jt</div><div class="m">disetujui 2 Nov · belum dibayar</div></div></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card" style="margin-top:12px">
+                <div class="hd"><h4>Catat pembayaran · 087/INV/EPC/IX/2026</h4><span class="more">sisa saldo Rp 914.600.000</span></div>
+                <div class="bd">
+                  <div style="display:grid;grid-template-columns:repeat(5,1fr) auto;gap:10px;align-items:end">
+                    <div class="field"><label>Kas diterima</label><div class="input mono">900.000.000</div></div>
+                    <div class="field"><label>Potongan PPh</label><div class="input mono">4.000.000</div></div>
+                    <div class="field"><label>Jenis PPh</label><div class="input">PPh 23 · jasa</div></div>
+                    <div class="field"><label>Tanggal</label><div class="input">5 Nov 2026</div></div>
+                    <div class="field"><label>Referensi</label><div class="input mono">TRF/ARN/1105</div></div>
+                    <span class="btn lime" style="height:30px">Simpan</span>
+                  </div>
+                  <p class="hint" style="margin-top:8px">Kas ditambah potongan tidak boleh melebihi saldo. Status berubah menjadi Sebagian Dibayar, saldo menjadi Rp 10,6 jt.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ============================================================ 10 -->
+  <section class="chapter" id="s10">
+    <div class="chapter-head">
+      <span class="num">10</span>
+      <h2>Dokumen lintas proyek &amp; pratinjau</h2>
+      <span class="note">Arsip dan pratinjau PDF dalam satu layar, tanpa berpindah halaman.</span>
+    </div>
+    <p>Untuk pekerjaan dokumen, pengguna perlu melihat hasilnya sambil menyesuaikan. v2 menaruh pratinjau A4 di kanan dan blok isi di kiri, sehingga tidak perlu bolak-balik antara mode sunting dan mode cetak.</p>
+
+    <div class="screens">
+      <figure class="screen">
+        <div class="screen-bar"><div class="dots"><i></i><i></i><i></i></div><div class="url">ardaya.app/#/documents</div><span class="badge">Dokumen</span><span class="label">Arsip semua proyek</span></div>
+        <div class="viewport" data-w="1440">
+          <div class="canvas" data-nav="documents" data-crumb="Dokumen">
+            <div class="body">
+              <div class="pagehead">
+                <div><h3>Dokumen</h3><p class="sub">13 dokumen · 4 draft · 9 final terkunci</p></div>
+                <div class="actions"><div class="search" style="margin:0;width:200px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:13px;height:13px"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Cari nomor dokumen</div><span class="btn">Unggah</span><span class="btn lime">Generate</span></div>
+              </div>
+
+              <div class="grid" style="grid-template-columns:330px 1fr;gap:12px;margin-top:14px">
+                <div class="card" style="overflow:hidden">
+                  <div class="bd" style="padding:8px">
+                    <div class="doclist">
+                      <div class="dl on"><div class="t">BAST 1 — Modernisasi LVMDP</div><div class="m mono">017/BAST/EPC/III/2026</div><span class="pill ok"><i></i>Final</span></div>
+                      <div class="dl"><div class="t">Laporan progres minggu 42</div><div class="m mono">PRJ-2026-014 · PROGRESS-042</div><span class="pill wk"><i></i>Final</span></div>
+                      <div class="dl"><div class="t">As-Built SLD</div><div class="m mono">PRJ-2026-014 · ASBUILT-SLD</div><span class="pill ok"><i></i>Final</span></div>
+                      <div class="dl"><div class="t">Hasil uji beban (loadbank)</div><div class="m mono">PRJ-2026-014 · UJI-BEBAN</div><span class="pill warn"><i></i>Draft</span></div>
+                      <div class="dl"><div class="t">BA training operator</div><div class="m mono">PRJ-2026-014 · TRAINING</div><span class="pill warn"><i></i>Draft</span></div>
+                      <div class="dl"><div class="t">Invoice 096 · progres</div><div class="m mono">096/INV/EPC/X/2026</div><span class="pill info"><i></i>Terkirim</span></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="card" style="display:grid;grid-template-columns:1fr 300px">
+                  <div class="bd" style="border-right:1px solid var(--hair)">
+                    <p class="eyebrow">Blok isi · bisa diubah sebelum difinalkan</p>
+                    <div style="margin-top:10px;display:flex;flex-direction:column;gap:7px">
+                      <div class="block"><span class="bh">Kop &amp; nomor</span><span class="bx">PT ARDAYA ENERGI SISTEM · NPWP 02.345.678.9-092.000</span></div>
+                      <div class="block"><span class="bh">Pihak</span><span class="bx">PT Arunika Retail Indonesia — diwakili Budi Santoso, Facility Manager</span></div>
+                      <div class="block"><span class="bh">Lingkup</span><span class="bx">Genset 2×500 kVA, panel sinkronisasi, kabel power, fuel system</span></div>
+                      <div class="block"><span class="bh">Data dinamis</span><span class="bx">Progres 68,7% · biaya Rp 1.287.450.000 · cuaca hujan ringan</span></div>
+                      <div class="block"><span class="bh">Tanda tangan</span><span class="bx">2 pihak · tempat &amp; tanggal terisi otomatis</span></div>
+                    </div>
+                    <div style="display:flex;gap:6px;margin-top:12px"><span class="btn sm">Edit blok</span><span class="btn sm">Simpan snapshot</span></div>
+                  </div>
+                  <div class="bd" style="background:var(--paper-2);display:grid;place-items:center">
+                    <div class="a4">
+                      <div class="a4-head"><b>PT ARDAYA ENERGI SISTEM</b><span>Laporan Progres Mingguan</span><span>PRJ-2026-014 · minggu 42</span></div>
+                      <div class="a4-line w60"></div><div class="a4-line w90"></div><div class="a4-line w80"></div><div class="a4-line w70"></div>
+                      <div class="a4-table"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+                      <div class="a4-line w85" style="margin-top:10px"></div><div class="a4-line w55"></div>
+                      <div class="a4-sign"><span></span><span></span></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ============================================================ 11 -->
+  <section class="chapter" id="s11">
+    <div class="chapter-head">
+      <span class="num">11</span>
+      <h2>Peluang</h2>
+      <span class="note">Corong penawaran dengan nilai tertimbang, bukan daftar kartu datar.</span>
+    </div>
+    <p>Peluang dinilai dari dua hal: berapa nilainya dan seberapa mungkin menang. v2 menampilkan corong berisi nilai tertimbang per tahap, lalu daftar peluang yang menampilkan probabilitas sebagai bagian dari angka — supaya prioritas terlihat tanpa menghitung sendiri.</p>
+
+    <div class="screens">
+      <figure class="screen">
+        <div class="screen-bar"><div class="dots"><i></i><i></i><i></i></div><div class="url">ardaya.app/#/opportunities</div><span class="badge">Peluang</span><span class="label">Estimator</span></div>
+        <div class="viewport" data-w="1440">
+          <div class="canvas" data-nav="opportunities" data-crumb="Peluang">
+            <div class="body">
+              <div class="pagehead">
+                <div><h3>Peluang</h3><p class="sub">Nilai tertimbang = nilai estimasi × probabilitas. Hanya peluang menang yang bisa dikonversi menjadi proyek.</p></div>
+                <div class="actions"><span class="btn lime">Peluang baru</span></div>
+              </div>
+
+              <div class="grid g-1-2" style="margin-top:14px">
+                <div class="card">
+                  <div class="hd"><h4>Corong</h4><span class="more">nilai tertimbang</span></div>
+                  <div class="bd">
+                    <div class="funnel">
+                      <div class="f"><span>Kualifikasi</span><div class="track"><div class="fill" style="width:26%"></div></div><span class="amt">1,2 M</span></div>
+                      <div class="f"><span>Penawaran</span><div class="track"><div class="fill" style="width:58%"></div></div><span class="amt">2,7 M</span></div>
+                      <div class="f"><span>Negosiasi</span><div class="track"><div class="fill" style="width:84%"></div></div><span class="amt">3,9 M</span></div>
+                      <div class="f"><span>Menang</span><div class="track"><div class="fill sig" style="width:64%"></div></div><span class="amt">2,9 M</span></div>
+                    </div>
+                    <div class="hr"></div>
+                    <div class="kv"><span>Total pipeline</span><b class="mono">Rp 10,7 M</b></div>
+                    <div class="kv"><span>Tertimbang</span><b class="mono">Rp 4,6 M</b></div>
+                    <div class="kv"><span>Rasio menang 90 hari</span><b class="mono">38%</b></div>
+                  </div>
+                </div>
+
+                <div class="card">
+                  <div class="hd"><h4>Peluang aktif</h4><span class="more">5 peluang</span></div>
+                  <table class="tbl">
+                    <tr><th>Peluang</th><th>Klien</th><th>Tahap</th><th class="r">Nilai</th><th class="r">Prob.</th><th class="r">Tertimbang</th></tr>
+                    <tr><td>Genset 3×800 kVA DC Karawang<div class="m" style="color:var(--subtle);font-size:9.5px">tenggat 18 Nov</div></td><td>PT Arunika</td><td><span class="pill warn"><i></i>Negosiasi</span></td><td class="r mono">3.240.000.000</td><td class="r mono">70%</td><td class="r mono">2.268.000.000</td></tr>
+                    <tr><td>Panel distribusi gudang Bekasi</td><td>PT Sinar Gudang</td><td><span class="pill warn"><i></i>Penawaran</span></td><td class="r mono">1.850.000.000</td><td class="r mono">45%</td><td class="r mono">832.500.000</td></tr>
+                    <tr><td>Upgrade ATS hotel Sudirman</td><td>PT Graha Prima</td><td><span class="pill info"><i></i>Kualifikasi</span></td><td class="r mono">920.000.000</td><td class="r mono">25%</td><td class="r mono">230.000.000</td></tr>
+                    <tr><td>Genset 2×500 kVA &amp; panel</td><td>PT Arunika</td><td><span class="pill ok"><i></i>Menang</span></td><td class="r mono">5.035.000.000</td><td class="r mono">100%</td><td class="r mono">5.035.000.000</td></tr>
+                  </table>
+                </div>
+              </div>
+
+              <div class="grid g3" style="margin-top:12px">
+                <div class="card"><div class="bd"><p class="eyebrow">RAB klien vs internal</p><p class="spec" style="margin-top:6px">Harga jual disusun terpisah agar struktur biaya tidak pernah terbuka ke klien. Margin terencana muncul sebagai selisih kedua RAB.</p></div></div>
+                <div class="card"><div class="bd"><p class="eyebrow">Konversi sekali</p><p class="spec" style="margin-top:6px">Setelah dikonversi, tombol konversi hilang. Proyek menyimpan tautan ke peluang asal untuk jejak.</p></div></div>
+                <div class="card"><div class="bd"><p class="eyebrow">Tenggat</p><p class="spec" style="margin-top:6px">Tenggat penawaran yang lewat 3 hari diberi penanda kuning, lewat 7 hari merah.</p></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ============================================================ 12 -->
+  <section class="chapter" id="s12">
+    <div class="chapter-head">
+      <span class="num">12</span>
+      <h2>Audit Trail</h2>
+      <span class="note">Bukan tabel log, melainkan garis waktu yang bisa disaring per objek.</span>
+    </div>
+    <p>Jejak audit dibaca saat ada pertanyaan "siapa mengubah ini". Karena itu bentuknya garis waktu berkelompok per hari, dengan perubahan nilai ditampilkan sebagai diff kecil yang bisa dipindai. Filter objek di kiri membuat penelusuran satu invoice atau satu pos anggaran menjadi cepat.</p>
+
+    <div class="screens">
+      <figure class="screen">
+        <div class="screen-bar"><div class="dots"><i></i><i></i><i></i></div><div class="url">ardaya.app/#/activity</div><span class="badge">Audit</span><span class="label">Append-only</span></div>
+        <div class="viewport" data-w="1440">
+          <div class="canvas" data-nav="activity" data-crumb="Audit Trail">
+            <div class="body">
+              <div class="pagehead">
+                <div><h3>Audit Trail</h3><p class="sub">Tidak dapat diubah atau dihapus, termasuk oleh Admin. 1.284 catatan dalam cakupan Anda.</p></div>
+                <div class="actions"><div class="search" style="margin:0;width:230px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:13px;height:13px"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Cari objek, pelaku, alasan</div><span class="btn">Ekspor CSV</span></div>
+              </div>
+
+              <div class="grid" style="grid-template-columns:200px 1fr;gap:12px;margin-top:14px">
+                <div class="card"><div class="bd" style="padding:9px">
+                  <p class="eyebrow" style="padding:0 3px 6px">Objek</p>
+                  <div class="setnav">
+                    <a class="on">Semua <span class="mono" style="margin-left:auto;font-size:9px">1.284</span></a>
+                    <a>Pengeluaran <span class="mono" style="margin-left:auto;font-size:9px">412</span></a>
+                    <a>Invoice <span class="mono" style="margin-left:auto;font-size:9px">186</span></a>
+                    <a>Anggaran <span class="mono" style="margin-left:auto;font-size:9px">208</span></a>
+                    <a>Change order <span class="mono" style="margin-left:auto;font-size:9px">64</span></a>
+                    <a>Dokumen <span class="mono" style="margin-left:auto;font-size:9px">97</span></a>
+                    <a>Proyek <span class="mono" style="margin-left:auto;font-size:9px">54</span></a>
+                  </div>
+                  <div class="hr"></div>
+                  <p class="eyebrow" style="padding:0 3px 6px">Pelaku</p>
+                  <div class="setnav"><a class="on">Semua</a><a>Rizky (PM)</a><a>Dewi (Finance)</a><a>Candra (Field)</a><a>Admin</a></div>
+                </div></div>
+
+                <div class="card"><div class="bd">
+                  <div class="audit">
+                    <div class="a-day">Hari ini · 5 November 2026</div>
+                    <div class="a-item sig">
+                      <div class="when"><div class="who">Dewi Lestari</div><div>Finance</div><div style="margin-top:3px">08.02 WIB</div></div>
+                      <div><div class="what"><b>Menyetujui pengeluaran</b> EXP-2026-000045 · Rp 4.662.000</div><div class="hint">PRJ · overhead kantor · 1 baris biaya</div><span class="chg">status: SUBMITTED → APPROVED</span></div>
+                    </div>
+                    <div class="a-item">
+                      <div class="when"><div class="who">Rizky Pratama</div><div>Project Manager</div><div style="margin-top:3px">07.41 WIB</div></div>
+                      <div><div class="what"><b>Mengubah nilai kontrak</b> PRJ-2026-014</div><div class="hint">Alasan: penerapan CO-014-02 panel sinkronisasi</div><span class="chg">contractValue: 4.855.000.000 → 5.035.000.000</span></div>
+                    </div>
+
+                    <div class="a-day">4 November 2026</div>
+                    <div class="a-item">
+                      <div class="when"><div class="who">Rizky Pratama</div><div>Project Manager</div><div style="margin-top:3px">16.42 WIB</div></div>
+                      <div><div class="what"><b>Menetapkan baseline</b> anggaran internal v2</div><div class="hint">Menggantikan baseline v1 · CO-014-02</div><span class="chg">total: 3.750.000.000 → 3.870.000.000</span></div>
+                    </div>
+                    <div class="a-item">
+                      <div class="when"><div class="who">Candra Wijaya</div><div>Field</div><div style="margin-top:3px">15.10 WIB</div></div>
+                      <div><div class="what"><b>Melaporkan progres</b> instalasi kabel power</div><div class="hint">Isu: akses kerja malam dibatasi sampai 23.00</div><span class="chg">progressPct: 52 → 58</span></div>
+                    </div>
+
+                    <div class="a-day">3 November 2026</div>
+                    <div class="a-item">
+                      <div class="when"><div class="who">Dewi Lestari</div><div>Finance</div><div style="margin-top:3px">11.20 WIB</div></div>
+                      <div><div class="what"><b>Mencatat pembayaran</b> 087/INV/EPC/IX/2026</div><div class="hint">Kas Rp 1.020.000.000 · PPh 23 Rp 20.400.000 · referensi TRF/ARN/1031</div><span class="chg">status: SENT → PARTIALLY_PAID</span></div>
+                    </div>
+                    <div class="a-item">
+                      <div class="when"><div class="who">Admin</div><div>System Admin</div><div style="margin-top:3px">09.02 WIB</div></div>
+                      <div><div class="what"><b>Override gerbang tahap</b> menuju Pelaksanaan</div><div class="hint" style="color:var(--warn)">Alasan: tanggal mulai belum diisi, disetujui owner proyek</div><span class="chg">stage: PROCUREMENT_MOBILIZATION → IN_PROGRESS</span></div>
+                    </div>
+                  </div>
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">
+                    <span class="hint">Menampilkan 6 dari 1.284</span>
+                    <div style="display:flex;gap:6px"><span class="btn sm">Sebelumnya</span><span class="btn sm">Berikutnya</span></div>
+                  </div>
+                </div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ============================================================ 13 -->
+  <section class="chapter" id="s13">
+    <div class="chapter-head">
+      <span class="num">13</span>
+      <h2>Pengaturan</h2>
+      <span class="note">Pengaturan yang mengubah arti dokumen harus terlihat berisiko, bukan netral.</span>
+    </div>
+    <p>Beberapa isian di sini memengaruhi dokumen dan validasi berikutnya. v2 menandainya dengan pita kontrol di kanan dan penjelasan dampak, bukan sekadar tombol simpan.</p>
+
+    <div class="screens">
+      <figure class="screen">
+        <div class="screen-bar"><div class="dots"><i></i><i></i><i></i></div><div class="url">ardaya.app/#/settings</div><span class="badge">Admin</span><span class="label">Pengaturan</span></div>
+        <div class="viewport" data-w="1440">
+          <div class="canvas" data-nav="settings" data-crumb="Pengaturan">
+            <div class="body">
+              <div class="pagehead">
+                <div><h3>Pengaturan</h3><p class="sub">Hanya Admin. Perubahan dicatat di jejak audit dengan nilai lama dan baru.</p></div>
+                <div class="actions"><span class="btn">Batalkan</span><span class="btn lime">Simpan perubahan</span></div>
+              </div>
+
+              <div class="setgrid" style="margin-top:16px">
+                <div>
+                  <div class="setnav">
+                    <a class="on">Identitas perusahaan</a>
+                    <a>Parameter biaya</a>
+                    <a>Pengguna &amp; peran</a>
+                    <a>Kamus biaya</a>
+                    <a>Satuan</a>
+                    <a>Template dokumen</a>
+                  </div>
+                  <div class="card" style="margin-top:12px"><div class="bd">
+                    <p class="eyebrow" style="color:var(--warn)">Perubahan berisiko</p>
+                    <p class="hint" style="margin-top:5px">3 isian di halaman ini memengaruhi dokumen baru. Dokumen lama tetap memakai snapshot.</p>
+                  </div></div>
+                </div>
+
+                <div style="display:flex;flex-direction:column;gap:12px">
+                  <div class="card">
+                    <div class="hd"><h4>Identitas perusahaan</h4><span class="more">dipakai pada kop dokumen</span></div>
+                    <div class="bd" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                      <div class="field"><label>Nama legal</label><div class="input">PT Ardaya Energi Sistem</div></div>
+                      <div class="field"><label>Nama tampilan</label><div class="input">Ardaya EPC</div></div>
+                      <div class="field"><label>NPWP</label><div class="input mono">02.345.678.9-092.000</div></div>
+                      <div class="field"><label>Telepon</label><div class="input mono">+62 21 5550 8811</div></div>
+                      <div class="field" style="grid-column:span 2"><label>Alamat</label><div class="input">Jl. Raya Bekasi Km. 22, Jakarta Timur 13910</div></div>
+                    </div>
+                  </div>
+
+                  <div class="card">
+                    <div class="hd"><h4>Parameter biaya</h4><span class="more">memengaruhi validasi &amp; invoice baru</span></div>
+                    <div class="bd" style="display:flex;flex-direction:column;gap:12px">
+                      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+                        <div><div style="font-size:11.5px;font-weight:650">Tarif PPN default</div><div class="hint">Dipakai saat membuat invoice dan pengeluaran baru</div></div>
+                        <div style="display:flex;align-items:center;gap:8px"><div class="input mono" style="width:74px;justify-content:flex-end">11,00</div><span class="hint">%</span></div>
+                      </div>
+                      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:10px;border-top:1px solid var(--hair)">
+                        <div><div style="font-size:11.5px;font-weight:650">Izinkan split nota</div><div class="hint">Satu nota boleh dipecah menjadi beberapa pengeluaran lintas pos</div></div>
+                        <div class="switch"></div>
+                      </div>
+                      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:10px;border-top:1px solid var(--hair)">
+                        <div><div style="font-size:11.5px;font-weight:650">Wajib nomor nota</div><div class="hint">Menolak pengajuan tanpa nomor nota</div></div>
+                        <div class="switch on"></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="card">
+                    <div class="hd"><h4>Pengguna &amp; peran</h4><span class="more">6 pengguna</span></div>
+                    <table class="tbl">
+                      <tr><th>Nama</th><th>Email</th><th>Peran</th><th>Proyek</th><th></th></tr>
+                      <tr><td>Rizky Pratama</td><td class="code">pm@ardaya.id</td><td><span class="pill sig"><i></i>PM</span></td><td class="hint">2 proyek</td><td class="r"><span class="btn sm">Ubah</span></td></tr>
+                      <tr><td>Dewi Lestari</td><td class="code">finance@ardaya.id</td><td><span class="pill info"><i></i>Finance</span></td><td class="hint">semua</td><td class="r"><span class="btn sm">Ubah</span></td></tr>
+                      <tr><td>Candra Wijaya</td><td class="code">field@ardaya.id</td><td><span class="pill mut"><i></i>Field</span></td><td class="hint">1 proyek</td><td class="r"><span class="btn sm">Ubah</span></td></tr>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </figure>
+    </div>
+  </section>

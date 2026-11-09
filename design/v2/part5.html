@@ -1,0 +1,255 @@
+  <!-- ============================================================ 14 -->
+  <section class="chapter" id="s14">
+    <div class="chapter-head">
+      <span class="num">14</span>
+      <h2>Keadaan khusus</h2>
+      <span class="note">Kosong, memuat, galat, luring, dan tanpa izin — semuanya digambar, bukan hanya diwarnai abu.</span>
+    </div>
+    <p>Bagian ini yang paling sering dilupakan aplikasi admin, padahal justru di sinilah pengguna lapangan bertemu aplikasi: sinyal hilang, nota gagal terkirim, sesi habis. Setiap keadaan punya satu kalimat alasan dan satu langkah berikutnya.</p>
+
+    <div class="screens">
+      <figure class="screen">
+        <div class="screen-bar"><div class="dots"><i></i><i></i><i></i></div><div class="url">ardaya.app/#/states</div><span class="badge">Keadaan</span><span class="label">6 contoh</span></div>
+        <div class="viewport" data-w="1440">
+          <div class="canvas" data-nav="projects" data-crumb="Keadaan">
+            <div class="body">
+              <div class="pagehead"><div><h3>Keadaan antarmuka</h3><p class="sub">Satu pola per keadaan: ikon, kalimat alasan, satu aksi utama.</p></div></div>
+
+              <div class="grid g3" style="margin-top:16px">
+                <div class="card state">
+                  <div class="st-icon empty"></div>
+                  <p class="st-t">Belum ada pengeluaran</p>
+                  <p class="st-b">Proyek ini belum punya nota tercatat. Mulai dari nota pertama, atau unggah beberapa sekaligus dari galeri.</p>
+                  <span class="btn lime sm">Catat biaya</span>
+                </div>
+                <div class="card state">
+                  <div class="st-icon offline"></div>
+                  <p class="st-t">Anda sedang luring</p>
+                  <p class="st-b">2 nota tersimpan di perangkat dan akan dikirim otomatis saat sinyal kembali. Tidak ada data yang hilang.</p>
+                  <span class="btn sm">Lihat antrean</span>
+                </div>
+                <div class="card state">
+                  <div class="st-icon denied"></div>
+                  <p class="st-t">Tidak ada akses ke proyek ini</p>
+                  <p class="st-b">Anda bukan anggota PRJ-2025-004. Minta admin menambahkan Anda, atau kembali ke daftar proyek.</p>
+                  <span class="btn sm">Kembali ke Proyek</span>
+                </div>
+              </div>
+
+              <div class="grid g3" style="margin-top:12px">
+                <div class="card state">
+                  <div class="st-icon error"></div>
+                  <p class="st-t">Data gagal dimuat</p>
+                  <p class="st-b">Koneksi ke server terputus. Kode kejadian <span class="mono">8f31c2</span> membantu admin menelusuri bila berulang.</p>
+                  <span class="btn sm">Coba lagi</span>
+                </div>
+                <div class="card state">
+                  <div class="skeleton-wrap">
+                    <div class="skeleton" style="height:11px;width:52%"></div>
+                    <div class="skeleton" style="height:9px;width:78%;margin-top:7px"></div>
+                    <div class="sk-rows"><div class="skeleton" style="height:22px"></div><div class="skeleton" style="height:22px"></div><div class="skeleton" style="height:22px"></div></div>
+                  </div>
+                  <p class="st-t" style="margin-top:12px">Memuat isi tab</p>
+                  <p class="st-b">Bentuk kerangka mengikuti isi sebenarnya, bukan pemutar berputar di tengah layar.</p>
+                </div>
+                <div class="card state" style="border-color:var(--warn-line);background:var(--warn-bg)">
+                  <div class="st-icon warn"></div>
+                  <p class="st-t">Pagu pos sudah penuh</p>
+                  <p class="st-b">EQP-02 terpakai 100%. Menyetujui nota ini berarti melewati pagu; alasan wajib ditulis di kolom catatan.</p>
+                  <div style="display:flex;gap:6px"><span class="btn sm">Tetap setujui</span><span class="btn sm ghost">Kembalikan</span></div>
+                </div>
+              </div>
+
+              <div class="grid g2" style="margin-top:12px">
+                <div class="card"><div class="bd">
+                  <p class="eyebrow">Notifikasi &amp; toast</p>
+                  <div style="display:flex;flex-direction:column;gap:7px;margin-top:9px">
+                    <div class="toast ok"><b>Pengeluaran disetujui</b><span>EXP-2026-000046 · Rp 41,63 jt masuk biaya aktual.</span></div>
+                    <div class="toast warn"><b>Tersimpan luring</b><span>Nota dikirim ulang otomatis saat sinyal kembali.</span></div>
+                    <div class="toast bad"><b>Gagal menyimpan</b><span>Nomor nota sudah dipakai EXP-2026-000042.</span></div>
+                  </div>
+                </div></div>
+                <div class="card"><div class="bd">
+                  <p class="eyebrow">Pemeriksaan &amp; validasi</p>
+                  <div style="display:flex;flex-direction:column;gap:8px;margin-top:9px">
+                    <div class="inline-err">Total nota berbeda dari jumlah baris + PPN <b>Rp 125.000</b> — alasan wajib diisi.</div>
+                    <div class="inline-info">Hasil OCR 94%. Periksa merchant, tanggal, dan nominal sebelum menyimpan.</div>
+                    <div class="inline-ok">Tidak ada duplikat: merchant, tanggal, dan nominal belum pernah dicatat.</div>
+                  </div>
+                </div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ============================================================ 15 -->
+  <section class="chapter" id="s15">
+    <div class="chapter-head">
+      <span class="num">15</span>
+      <h2>Ponsel · dipakai sambil berdiri</h2>
+      <span class="note">Empat layar yang paling sering dibuka tim lapangan.</span>
+    </div>
+    <p>Di lapangan, satu tangan memegang nota dan satu tangan memegang ponsel. Karena itu aksi utama memakai tombol mengambang yang besar, navigasi bawah hanya empat tujuan, dan wizard dibuat satu isian per layar dengan tombol lanjut yang selalu berada di jangkauan jempol.</p>
+
+    <div class="phones">
+      <!-- Ikhtisar -->
+      <div class="phone">
+        <div class="pcanvas">
+          <div class="pstatus"><span>09.41</span><span>4G ▮▮▮</span></div>
+          <div class="phead"><p class="eyebrow">PM · Rizky</p><h5>Ikhtisar</h5><p>2 proyek berjalan</p></div>
+          <div class="pbody">
+            <div class="pbig">
+              <div class="k">Biaya aktual</div>
+              <div class="v">Rp 1,287 M</div>
+              <div style="font-size:9px;color:#98a49d;margin-top:2px">dari kontrak Rp 5,035 M · 25,6%</div>
+              <div style="display:flex;gap:10px;margin-top:9px;padding-top:8px;border-top:1px solid #26332c">
+                <div style="flex:1"><div class="k">Piutang</div><div style="font-size:12px;color:#fff;font-weight:600" class="mono">1,453 M</div></div>
+                <div style="flex:1"><div class="k">Terlambat</div><div style="font-size:12px;color:#ff9d8f;font-weight:600" class="mono">538 jt</div></div>
+              </div>
+            </div>
+            <p class="eyebrow" style="margin:11px 0 6px">Perlu tindakan</p>
+            <div class="pcard" style="border-left:2px solid #cf5a4b"><div style="font-size:10px;font-weight:650">096/INV/EPC/X/2026</div><div style="font-size:9px;color:var(--muted);margin-top:1px">Terlambat 26 hari · Rp 538,35 jt</div></div>
+            <div class="pcard" style="border-left:2px solid #e3a33a"><div style="font-size:10px;font-weight:650">PT Uji Beban Presisi</div><div style="font-size:9px;color:var(--muted);margin-top:1px">Menunggu Anda · Rp 41,63 jt</div></div>
+          </div>
+          <div class="pnav">
+            <a class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span>Ikhtisar</span></a>
+            <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 7h18M3 12h18M3 17h12"/></svg><span>Proyek</span></a>
+            <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg><span>Setujui</span></a>
+            <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg><span>Nota</span></a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Catat nota -->
+      <div class="phone">
+        <div class="pcanvas">
+          <div class="pstatus"><span>09.44</span><span>4G ▮▮▮</span></div>
+          <div class="phead"><p class="eyebrow">Langkah 1 dari 4 · foto</p><h5>Catat biaya</h5><p>Nota difoto, OCR membaca, Anda memeriksa</p></div>
+          <div class="pbody">
+            <div style="border:1.5px dashed var(--line-2);border-radius:12px;padding:22px 12px;text-align:center;background:var(--surface)">
+              <div style="width:34px;height:34px;border-radius:9px;background:var(--paper-2);display:grid;place-items:center;margin:0 auto 8px;color:var(--graphite)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:16px;height:16px"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3"/></svg>
+              </div>
+              <div style="font-size:11px;font-weight:650">Ambil foto nota</div>
+              <div style="font-size:9px;color:var(--muted);margin-top:3px;line-height:1.5">Seluruh tepi nota harus terlihat.<br>Gambar dikompres sampai 1.600 px.</div>
+            </div>
+            <div style="display:flex;gap:6px;margin-top:8px">
+              <span class="btn sm" style="flex:1;justify-content:center">Galeri</span>
+              <span class="btn sm" style="flex:1;justify-content:center">PDF</span>
+            </div>
+            <p class="eyebrow" style="margin:12px 0 6px">Nota tersimpan luring</p>
+            <div class="pcard" style="display:flex;align-items:center;gap:8px">
+              <span style="width:7px;height:7px;border-radius:50%;background:#e3a33a;display:block"></span>
+              <div style="flex:1"><div style="font-size:10px;font-weight:650">SPBU Shell Cakung</div><div style="font-size:9px;color:var(--muted)" class="mono">Rp 3.750.000 · 22 Okt</div></div>
+              <span style="font-size:9px;color:var(--warn);font-weight:650">Menunggu</span>
+            </div>
+          </div>
+          <div class="pnav">
+            <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span>Ikhtisar</span></a>
+            <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 7h18M3 12h18M3 17h12"/></svg><span>Proyek</span></a>
+            <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg><span>Setujui</span></a>
+            <a class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg><span>Nota</span></a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Setujui -->
+      <div class="phone">
+        <div class="pcanvas">
+          <div class="pstatus"><span>09.52</span><span>4G ▮▮▮</span></div>
+          <div class="phead"><p class="eyebrow">Antrean 1 dari 3</p><h5>Setujui</h5><p>Bukti dulu, angka kemudian</p></div>
+          <div class="pbody">
+            <div style="border-radius:10px;background:#eceae1;padding:9px;display:grid;place-items:center;height:158px">
+              <div style="width:132px;background:#fff;border-radius:2px;padding:8px;box-shadow:0 6px 16px -8px rgba(0,0,0,.4);transform:rotate(-1.2deg);font-family:var(--mono);font-size:6.5px;color:#3f4d45;line-height:1.7">
+                <div style="text-align:center;border-bottom:1px dashed #cfd3c6;padding-bottom:4px;margin-bottom:4px"><b style="font-size:7px;color:var(--ink)">PT UJI BEBAN PRESISI</b><br>UBP/QUO/1026</div>
+                <div style="display:flex;justify-content:space-between"><span>Loadbank 800 kW</span><span>37.500.000</span></div>
+                <div style="display:flex;justify-content:space-between"><span>PPN 11%</span><span>4.125.000</span></div>
+                <div style="display:flex;justify-content:space-between;border-top:1px dashed #cfd3c6;margin-top:3px;padding-top:3px;color:var(--ink);font-weight:600"><span>TOTAL</span><span>41.625.000</span></div>
+              </div>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:9px">
+              <div><div style="font-size:10px;font-weight:650">PT Uji Beban Presisi</div><div style="font-size:9px;color:var(--muted)">EXP-2026-000046 · COM-01</div></div>
+              <div class="mono" style="font-size:13px;font-weight:650">41,63 jt</div>
+            </div>
+            <div style="display:flex;gap:5px;margin-top:9px">
+              <span class="btn sm" style="flex:1;justify-content:center;background:var(--ok-bg);border-color:var(--ok-line);color:var(--ok)">Setujui</span>
+              <span class="btn sm" style="flex:1;justify-content:center;background:var(--warn-bg);border-color:var(--warn-line);color:var(--warn)">Kembalikan</span>
+              <span class="btn sm" style="flex:1;justify-content:center;background:var(--danger-bg);border-color:var(--danger-line);color:var(--danger)">Tolak</span>
+            </div>
+          </div>
+          <div class="pnav">
+            <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span>Ikhtisar</span></a>
+            <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 7h18M3 12h18M3 17h12"/></svg><span>Proyek</span></a>
+            <a class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg><span>Setujui</span></a>
+            <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg><span>Nota</span></a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Progres -->
+      <div class="phone">
+        <div class="pcanvas" style="position:relative">
+          <div class="pstatus"><span>10.05</span><span>4G ▮▮▮</span></div>
+          <div class="phead"><p class="eyebrow">PRJ-2026-014</p><h5>Progres</h5><p>Progres terbobot 68,7% · rencana 72,4%</p></div>
+          <div class="pbody">
+            <div class="pcard" style="border-left:2px solid #e3a33a">
+              <div style="display:flex;justify-content:space-between;align-items:baseline"><div style="font-size:10.5px;font-weight:650">Instalasi kabel &amp; kontrol</div><span class="mono" style="font-size:9px;color:var(--muted)">20%</span></div>
+              <div class="bar" style="margin-top:5px"><i style="width:58%"></i><i class="pending" style="width:12%"></i></div>
+              <div style="font-size:9px;color:var(--muted);margin-top:4px">58% · rencana selesai 5 Nov</div>
+            </div>
+            <div class="pcard">
+              <div style="display:flex;justify-content:space-between;align-items:baseline"><div style="font-size:10.5px;font-weight:650">Fuel system &amp; uji bocor</div><span class="mono" style="font-size:9px;color:var(--muted)">8%</span></div>
+              <div class="bar" style="margin-top:5px"><i style="width:70%"></i></div>
+              <div style="font-size:9px;color:var(--muted);margin-top:4px">70% · rencana selesai 28 Okt</div>
+            </div>
+            <div class="pcard">
+              <div style="display:flex;justify-content:space-between;align-items:baseline"><div style="font-size:10.5px;font-weight:650">Loadbank &amp; commissioning</div><span class="mono" style="font-size:9px;color:var(--muted)">10%</span></div>
+              <div class="bar" style="margin-top:5px"><i style="width:15%"></i></div>
+              <div style="font-size:9px;color:var(--muted);margin-top:4px">15% · rencana selesai 8 Nov</div>
+            </div>
+            <p class="eyebrow" style="margin:11px 0 6px">Laporan terakhir</p>
+            <div class="pcard"><div style="font-size:9.5px">“Penarikan kabel panel ke genset 1 selesai; terminasi sisi genset 2 berjalan.”</div><div style="font-size:8.5px;color:var(--muted);margin-top:3px">21 Okt · Field · isu akses malam</div></div>
+          </div>
+          <span class="pfab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width:15px;height:15px"><path d="M12 5v14M5 12h14"/></svg>Perbarui</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ 16 -->
+  <section class="chapter" id="s16">
+    <div class="chapter-head">
+      <span class="num">16</span>
+      <h2>Kalau disetujui: rencana penerapan</h2>
+      <span class="note">Lima langkah, tiap langkah bisa berhenti tanpa merusak yang sudah ada.</span>
+    </div>
+    <p>Perubahan sebesar ini tidak masuk dalam satu PR. Urutannya disusun supaya setiap langkah punya hasil yang bisa dinilai sendiri, dan tidak ada layar yang setengah jadi saat deploy.</p>
+
+    <table class="diff">
+      <tr><th>Langkah</th><th>Isi</th><th>Hasil yang bisa diperiksa</th></tr>
+      <tr><td>1 · Token &amp; fondasi</td><td class="small">Perbarui <code>globals.css</code>: warna, radius 4/8/12/16, spasi, bayangan, tipografi angka. Tambah komponen <code>Surface</code>, <code>Pill</code>, <code>Meter</code>, <code>Sparkbars</code>.</td><td class="small">Seluruh halaman langsung berubah nuansa tanpa satu pun tata letak dipindahkan.</td></tr>
+      <tr><td>2 · Kerangka</td><td class="small">Rail dengan grup menu (Kerja / Komersial / Sistem), pita tahap proyek, kepala halaman baru, mode kepadatan.</td><td class="small">Navigasi dan ruang kerja proyek; semua tab ikut karena memakai satu kerangka.</td></tr>
+      <tr><td>3 · Layar utama</td><td class="small">Ikhtisar dengan pita kinerja, daftar proyek dengan bilah ganda, pengeluaran dengan bilah status kiri, kotak persetujuan dengan bukti besar.</td><td class="small">Empat layar yang paling sering dipakai, bisa dinilai dengan data demo.</td></tr>
+      <tr><td>4 · Layar pendukung</td><td class="small">Tagihan, dokumen, peluang, audit, pengaturan, keadaan kosong/memuat/galat/luring, dan ponsel.</td><td class="small">Cakupan penuh; tidak ada layar yang tertinggal dengan gaya lama.</td></tr>
+      <tr><td>5 · Verifikasi</td><td class="small"><code>tsc</code>, <code>next build</code>, pemeriksaan keyboard dan kontras, uji 375 px dan 1440 px.</td><td class="small">Tidak ada regresi fungsi; seluruh alur bisnis tetap sama.</td></tr>
+    </table>
+
+    <h3>Yang tidak diubah</h3>
+    <p class="spec">Nama menu dan tab, alur persetujuan, perhitungan PPN/PPh/retensi, aturan gerbang tahap, skema data, dan seluruh teks aturan bisnis. Ini redesign tampilan, sama seperti tahap 1–5 sebelumnya.</p>
+
+    <h3>Pertanyaan untuk Anda</h3>
+    <div class="grid g3" style="margin-top:10px">
+      <div class="card"><div class="bd"><p class="eyebrow">Pita kinerja</p><p class="spec" style="margin-top:6px">Setuju pita gelap berisi grafik jadi pusat Ikhtisar, atau grafik dipisah ke panel sendiri?</p></div></div>
+      <div class="card"><div class="bd"><p class="eyebrow">Rail grup menu</p><p class="spec" style="margin-top:6px">Menu dikelompokkan tiga grup, atau tetap satu daftar seperti sekarang?</p></div></div>
+      <div class="card"><div class="bd"><p class="eyebrow">Kepadatan</p><p class="spec" style="margin-top:6px">Default nyaman dengan pilihan padat, atau langsung padat untuk tim finance?</p></div></div>
+    </div>
+
+    <p class="spec" style="margin-top:18px;color:var(--subtle)">Papan ini statis: seluruh layar digambar dengan HTML dan CSS tanpa JavaScript, memakai data demo yang sama dengan aplikasi. Belum ada berkas aplikasi yang diubah.</p>
+  </section>
+
+</main>
+</body>
+</html>

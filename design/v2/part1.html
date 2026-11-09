@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ardaya EPC · Konsep Desain v2 "Signal"</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="concept.css">
+</head>
+<body>
+<main class="board">
+
+  <header class="board-head">
+    <div>
+      <p class="eyebrow">Konsep desain · v2 · untuk direview</p>
+      <h1>Signal: arah desain yang lebih tegas</h1>
+      <p class="lead">Jawaban atas kritik "terlalu basic". Bukan sekadar ganti warna: struktur halaman dirombak — satu elemen tanda tangan di setiap layar, angka sebagai tokoh utama, dan seluruh keadaan (kosong, memuat, galat, luring) ikut digambar. Semua halaman aplikasi ada di papan ini.</p>
+    </div>
+    <span class="stamp"><i></i>Belum ada kode diubah</span>
+  </header>
+
+  <nav class="index-nav">
+    <a href="#s01"><b>01</b> Diagnosis</a>
+    <a href="#s02"><b>02</b> Token &amp; skala</a>
+    <a href="#s03"><b>03</b> Masuk</a>
+    <a href="#s04"><b>04</b> Ikhtisar</a>
+    <a href="#s05"><b>05</b> Daftar proyek</a>
+    <a href="#s06"><b>06</b> Ruang kerja · 8 tab</a>
+    <a href="#s07"><b>07</b> Pengeluaran</a>
+    <a href="#s08"><b>08</b> Persetujuan</a>
+    <a href="#s09"><b>09</b> Tagihan &amp; finance</a>
+    <a href="#s10"><b>10</b> Dokumen</a>
+    <a href="#s11"><b>11</b> Peluang</a>
+    <a href="#s12"><b>12</b> Audit Trail</a>
+    <a href="#s13"><b>13</b> Pengaturan</a>
+    <a href="#s14"><b>14</b> Keadaan khusus</a>
+    <a href="#s15"><b>15</b> Ponsel</a>
+    <a href="#s16"><b>16</b> Implementasi</a>
+  </nav>
+
+  <!-- ============================================================ 01 -->
+  <section class="chapter" id="s01">
+    <div class="chapter-head">
+      <span class="num">01</span>
+      <h2>Diagnosis: kenapa terasa basic</h2>
+      <span class="note">Kritik yang jujur butuh alasan yang bisa diperiksa, bukan pembelaan.</span>
+    </div>
+
+    <p>Versi sekarang rapi, tetapi rapi dengan cara yang sama di semua tempat. Setiap halaman dibuka dengan judul kecil, deretan kartu putih bergaris 1px, lalu tabel. Tidak ada satu pun elemen yang hanya dimiliki Ardaya; kalau logonya dilepas, tampilannya bisa jadi aplikasi admin mana pun.</p>
+
+    <h3>Enam sebab yang paling berpengaruh</h3>
+    <table class="diff">
+      <tr><th>Masalah</th><th>Akibat yang terasa</th><th>Perbaikan di v2</th></tr>
+      <tr>
+        <td>Semua permukaan seragam</td>
+        <td class="small">Kartu, tabel, panel, modal semuanya putih + garis tipis + radius 10. Mata tidak tahu mana yang penting.</td>
+        <td class="small">Tiga tingkat permukaan: kanvas kertas, panel putih, dan satu blok tinta gelap per layar sebagai pusat perhatian.</td>
+      </tr>
+      <tr>
+        <td>Angka tidak jadi tokoh</td>
+        <td class="small">Nilai kontrak Rp 5,03 miliar dan jumlah notifikasi ditampilkan dengan bobot yang hampir sama.</td>
+        <td class="small">Skala angka 21–40px dengan tabular numerals, label kecil di atas, satuan dan konteks di bawah.</td>
+      </tr>
+      <tr>
+        <td>Tidak ada elemen tanda tangan</td>
+        <td class="small">Tidak ada yang diingat setelah menutup aplikasi.</td>
+        <td class="small">Pita kinerja gelap di Ikhtisar: grafik biaya vs kontrak sepanjang 12 bulan, selalu di tempat yang sama.</td>
+      </tr>
+      <tr>
+        <td>Warna status dipakai sebagai hiasan</td>
+        <td class="small">Lime muncul di tombol, garis, ikon, dan sorotan sekaligus, sehingga kehilangan arti.</td>
+        <td class="small">Lime hanya untuk "ini yang sedang berjalan / ini yang perlu Anda sentuh". Status memakai pasangan warna sendiri yang tenang.</td>
+      </tr>
+      <tr>
+        <td>Kepadatan tidak konsisten</td>
+        <td class="small">Baris tabel 44px, tetapi jarak antar kartu 12px dan padding panel 13px di satu layar, 20px di layar lain.</td>
+        <td class="small">Satu skala spasi 4/8/12/16/24/32 dan dua mode kepadatan: <em>comfortable</em> untuk baca, <em>dense</em> untuk tabel panjang.</td>
+      </tr>
+      <tr>
+        <td>Keadaan tidak digambar</td>
+        <td class="small">Kosong, memuat, galat, dan luring hanya teks abu-abu; belum ada rasa bahwa aplikasi ini dipakai di lapangan.</td>
+        <td class="small">Setiap keadaan punya bentuk sendiri, dengan alasan dan langkah berikutnya (lihat bab 14).</td>
+      </tr>
+    </table>
+
+    <h3>Yang dipertahankan</h3>
+    <p class="spec">Bahasa Indonesia, Instrument Sans + IBM Plex Mono, rail gelap, aksen lime, kepadatan nyaman, dan seluruh alur bisnis yang sudah ada. v2 mengubah <em>cara</em> informasi ditata, bukan apa yang bisa dilakukan pengguna.</p>
+  </section>
+
+  <!-- ============================================================ 02 -->
+  <section class="chapter" id="s02">
+    <div class="chapter-head">
+      <span class="num">02</span>
+      <h2>Token, tipografi, dan skala</h2>
+      <span class="note">Nilai di bawah ini yang akan ditulis ke <code>globals.css</code> bila arahnya disetujui.</span>
+    </div>
+
+    <h3>Warna</h3>
+    <div class="swatches">
+      <div class="sw"><div class="chip" style="background:#0d1310"></div><div class="info"><b>Ink</b><span>#0D1310</span></div></div>
+      <div class="sw"><div class="chip" style="background:#141d18"></div><div class="info"><b>Ink 2 · rail</b><span>#141D18</span></div></div>
+      <div class="sw"><div class="chip" style="background:#fbfbf8;border-bottom:1px solid var(--line)"></div><div class="info"><b>Paper</b><span>#FBFBF8</span></div></div>
+      <div class="sw"><div class="chip" style="background:#eef0e8"></div><div class="info"><b>Hairline</b><span>#EEF0E8</span></div></div>
+      <div class="sw"><div class="chip" style="background:#bef264"></div><div class="info"><b>Signal</b><span>#BEF264</span></div></div>
+      <div class="sw"><div class="chip" style="background:#1b2a12"></div><div class="info"><b>Signal ink</b><span>#1B2A12</span></div></div>
+      <div class="sw"><div class="chip" style="background:#146c47"></div><div class="info"><b>Ok</b><span>#146C47</span></div></div>
+      <div class="sw"><div class="chip" style="background:#8a4b00"></div><div class="info"><b>Warn</b><span>#8A4B00</span></div></div>
+      <div class="sw"><div class="chip" style="background:#a3271b"></div><div class="info"><b>Danger</b><span>#A3271B</span></div></div>
+      <div class="sw"><div class="chip" style="background:#1d4e73"></div><div class="info"><b>Info</b><span>#1D4E73</span></div></div>
+      <div class="sw"><div class="chip" style="background:#66736b"></div><div class="info"><b>Muted</b><span>#66736B</span></div></div>
+      <div class="sw"><div class="chip" style="background:#e3a33a"></div><div class="info"><b>At risk</b><span>#E3A33A</span></div></div>
+    </div>
+    <p class="spec">Aturan pemakaian: <b>ink</b> untuk struktur dan angka, <b>signal</b> hanya untuk keadaan aktif, aksi utama di layar itu, dan penanda "milik Anda". Satu layar maksimal satu tombol lime. Status memakai pasangan latar–garis–teks, tidak pernah warna mentah.</p>
+
+    <h3>Tipografi</h3>
+    <div class="scale">
+      <div><div style="font-size:40px;font-weight:600;letter-spacing:-.035em;color:var(--ink)">5,03 M</div><span>40 / 600 · hero angka</span></div>
+      <div><div style="font-size:28px;font-weight:600;letter-spacing:-.03em;color:var(--ink)">Ruang kerja</div><span>28 / 600 · judul layar</span></div>
+      <div><div style="font-size:18px;font-weight:600;letter-spacing:-.025em;color:var(--ink)">Anggaran internal</div><span>18 / 600 · judul panel</span></div>
+      <div><div style="font-size:13.5px;color:var(--ink)">Isi paragraf</div><span>13,5 / 400 · teks</span></div>
+      <div><div class="mono" style="font-size:11px;color:var(--muted)">EXP-2026-000046</div><span>11 mono · kode</span></div>
+      <div><div style="font-size:9px;font-weight:700;letter-spacing:.14em;color:var(--muted)">KONTRAK BERJALAN</div><span>9 / 700 · label</span></div>
+    </div>
+    <p class="spec">Angka uang selalu memakai <span class="mono">tabular-nums</span> dan satuan ringkas (<span class="mono">Rp 5,03 M</span>) di tempat sempit; nilai penuh hanya di tempat yang dibaca pelan, misalnya total invoice. Kode dokumen selalu mono supaya bisa dipindai mata.</p>
+
+    <h3>Spasi, radius, kepadatan</h3>
+    <div class="grid g3">
+      <div class="card"><div class="bd">
+        <p class="eyebrow">Spasi</p>
+        <p class="spec" style="margin-top:6px">4 · 8 · 12 · 16 · 24 · 32 · 48. Padding panel 16, jarak antarkartu 12, jarak antarbagian 32.</p>
+      </div></div>
+      <div class="card"><div class="bd">
+        <p class="eyebrow">Radius</p>
+        <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+          <span class="chip-sm" style="border-radius:4px"></span>
+          <span class="chip-sm" style="border-radius:8px"></span>
+          <span class="chip-sm" style="border-radius:12px"></span>
+          <span class="chip-sm" style="border-radius:16px"></span>
+        </div>
+        <p class="spec" style="margin-top:8px">4 kontrol · 8 input · 12 kartu · 16 bingkai layar. Tidak ada radius lain.</p>
+      </div></div>
+      <div class="card"><div class="bd">
+        <p class="eyebrow">Kepadatan</p>
+        <p class="spec" style="margin-top:6px">Baris tabel 40px (nyaman) atau 30px (padat, untuk daftar pengeluaran dan audit). Pilihan disimpan per pengguna.</p>
+      </div></div>
+    </div>
+  </section>
+
+  <!-- ============================================================ 03 -->
+  <section class="chapter" id="s03">
+    <div class="chapter-head">
+      <span class="num">03</span>
+      <h2>Halaman masuk</h2>
+      <span class="note">Kesan pertama: alat kerja lapangan, bukan panel admin.</span>
+    </div>
+    <p>Sisi kiri membawa janji produk yang konkret, bukan slogan: apa yang dilacak, dari mana asalnya, dan bagaimana bisa diperiksa. Tiga angka nyata di bawah memberi rasa skala pekerjaan. Sisi kanan tetap tenang dan sempit supaya formulir tidak bersaing.</p>
+
+    <div class="screens">
+      <figure class="screen">
+        <div class="screen-bar"><div class="dots"><i></i><i></i><i></i></div><div class="url">ardaya.app/masuk</div><span class="badge">Masuk</span><span class="label">Untuk semua peran</span></div>
+        <div class="viewport" data-w="1440">
+          <div class="canvas" data-bare="true">
+            <div class="body" style="grid-column:1 / -1">
+              <div class="login">
+                <div class="art">
+                  <div class="grid-bg"></div>
+                  <div style="display:flex;align-items:center;gap:10px;position:relative">
+                    <span style="width:30px;height:30px;border-radius:8px;background:var(--signal);display:grid;place-items:center;color:var(--ink);font-weight:800;font-size:14px">A</span>
+                    <div><div style="font-size:12.5px;font-weight:700;color:#fff;letter-spacing:.02em">ARDAYA EPC</div><div style="font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;color:#66736b">Project control</div></div>
+                  </div>
+                  <h2 style="margin-top:64px;position:relative">Dari nota lapangan<br>sampai <em>BAST</em>.</h2>
+                  <p style="position:relative">Satu alur biaya, komitmen, tagihan, dan serah terima. Setiap angka bisa ditelusuri sampai ke bukti nota dan keputusan yang menyetujuinya.</p>
+                  <div class="metricstrip">
+                    <div><div class="k">Proyek berjalan</div><div class="v">2 · Rp 6,72 M</div></div>
+                    <div><div class="k">Nota tercatat</div><div class="v">58 · 0 ganda</div></div>
+                    <div><div class="k">Jejak audit</div><div class="v">append-only</div></div>
+                  </div>
+                </div>
+                <div class="formside">
+                  <div class="box">
+                    <h3>Selamat datang</h3>
+                    <p class="p">Masuk untuk melanjutkan. Akses menyesuaikan peran dan keanggotaan proyek Anda.</p>
+                    <div style="display:flex;flex-direction:column;gap:9px;margin-top:18px">
+                      <div class="field"><label>Email kantor</label><div class="input">pm@ardaya.id</div></div>
+                      <div class="field"><label>Kata sandi</label><div class="input mono">••••••••••<span style="margin-left:auto;color:var(--subtle);font-size:10px">Lihat</span></div></div>
+                      <div class="btn lime" style="height:34px;justify-content:center;margin-top:2px">Masuk ke workspace</div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;margin:18px 0 8px">
+                      <span style="height:1px;background:var(--line);flex:1"></span>
+                      <span style="font-size:9px;font-weight:700;letter-spacing:.12em;color:var(--subtle)">AKUN DEMO</span>
+                      <span style="height:1px;background:var(--line);flex:1"></span>
+                    </div>
+                    <div class="demo">
+                      <button><span class="av">AD</span><span><span class="n">Admin</span><br><span class="r">semua menu</span></span></button>
+                      <button><span class="av">PM</span><span><span class="n">Project Manager</span><br><span class="r">anggota proyek</span></span></button>
+                      <button><span class="av">FN</span><span><span class="n">Finance</span><br><span class="r">tagihan &amp; PPh</span></span></button>
+                      <button><span class="av">FL</span><span><span class="n">Field</span><br><span class="r">nota &amp; progres</span></span></button>
+                    </div>
+                    <p style="margin-top:14px;font-size:9.5px;color:var(--subtle)">Delapan percobaan gagal per menit akan ditahan sementara.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ============================================================ 04 -->
+  <section class="chapter" id="s04">
+    <div class="chapter-head">
+      <span class="num">04</span>
+      <h2>Ikhtisar portofolio</h2>
+      <span class="note">Pusat perhatian: pita kinerja gelap dengan grafik biaya vs kontrak.</span>
+    </div>
+    <p>Halaman ini harus menjawab tiga pertanyaan dalam lima detik: berapa besar uang yang sudah keluar, berapa yang belum tertagih, dan apa yang harus saya kerjakan hari ini. Kartu KPI yang dulu empat kotak setara kini digabung ke dalam satu pita gelap yang memuat grafik — satu elemen besar lebih mudah diingat daripada empat elemen kecil.</p>
+
+    <div class="screens">
+      <figure class="screen">
+        <div class="screen-bar"><div class="dots"><i></i><i></i><i></i></div><div class="url">ardaya.app/#/dashboard</div><span class="badge">Ikhtisar</span><span class="label">PM · 2 proyek dalam cakupan</span></div>
+        <div class="viewport" data-w="1440">
+          <div class="canvas" data-nav="dashboard" data-crumb="Ikhtisar">
+            <div class="body">
+              <div class="pagehead">
+                <div>
+                  <h3>Ikhtisar portofolio</h3>
+                  <p class="sub">Data per 5 November 2026, 08.14 WIB · 2 proyek berjalan, 1 selesai</p>
+                </div>
+                <div class="actions">
+                  <div class="seg"><span class="on">Semua</span><span>Berjalan</span><span>Selesai</span></div>
+                  <span class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 5h16M7 12h10M10 19h4"/></svg>Ekspor</span>
+                  <span class="btn lime"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14"/></svg>Catat biaya</span>
+                </div>
+              </div>
+
+              <div class="band">
+                <div class="row1">
+                  <div><div class="k">Kontrak berjalan</div><div class="v">Rp 5,035 M</div><div class="delta">+Rp 180 jt dari CO #2 · disetujui</div></div>
+                  <div><div class="k">Biaya aktual</div><div class="v">Rp 1,287 M <small>· 25,6%</small></div><div class="delta">termasuk 2 nota menunggu?</div></div>
+                  <div><div class="k">Piutang</div><div class="v">Rp 1,453 M</div><div class="delta bad">Rp 538 jt lewat 26 hari</div></div>
+                  <div><div class="k">Sisa komitmen PO</div><div class="v">Rp 1,134 M</div><div class="delta">dari 3 PO aktif</div></div>
+                </div>
+                <div class="sparkline">
+                  <svg viewBox="0 0 1440 118" preserveAspectRatio="none">
+                    <defs>
+                      <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#bef264" stop-opacity=".28"/>
+                        <stop offset="100%" stop-color="#bef264" stop-opacity="0"/>
+                      </linearGradient>
+                    </defs>
+                    <line x1="0" y1="88" x2="1440" y2="88" stroke="#26332c" stroke-width="1"/>
+                    <line x1="0" y1="46" x2="1440" y2="46" stroke="#1d2922" stroke-width="1" stroke-dasharray="3 5"/>
+                    <path d="M0,96 L131,92 L262,84 L393,80 L524,70 L655,64 L786,52 L917,44 L1048,36 L1179,30 L1310,24 L1440,20 L1440,118 L0,118 Z" fill="url(#fade)"/>
+                    <path d="M0,96 L131,92 L262,84 L393,80 L524,70 L655,64 L786,52 L917,44 L1048,36 L1179,30 L1310,24 L1440,20" fill="none" stroke="#bef264" stroke-width="2"/>
+                    <path d="M0,104 L131,101 L262,97 L393,93 L524,90 L655,86 L786,80 L917,76 L1048,71 L1179,67 L1310,62 L1440,58" fill="none" stroke="#66736b" stroke-width="1.5" stroke-dasharray="4 4"/>
+                    <circle cx="1179" cy="30" r="3.5" fill="#bef264"/>
+                  </svg>
+                  <div class="axis"><span>Des</span><span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>Mei</span><span>Jun</span><span>Jul</span><span>Agu</span><span>Sep</span><span>Okt</span><span>Nov</span></div>
+                </div>
+              </div>
+              <div class="legend" style="margin-top:8px">
+                <span><i style="background:var(--signal)"></i>Biaya aktual kumulatif</span>
+                <span><i style="background:#66736b"></i>Rencana anggaran</span>
+                <span><i style="background:#e3a33a"></i>Perlu tindakan</span>
+                <span style="margin-left:auto;font-family:var(--mono);font-size:9px">sumber: 11 pengeluaran disetujui · 3 PO aktif</span>
+              </div>
+
+              <div class="grid g-1-2" style="margin-top:14px">
+                <div class="card">
+                  <div class="hd"><h4>Perlu tindakan</h4><span class="more">6 terbuka</span></div>
+                  <div class="rows">
+                    <div class="rowitem bad"><span class="tick"></span><div><div class="t">096/INV/EPC/X/2026</div><div class="m">PRJ-2026-014 · saldo Rp 538,35 jt · jatuh tempo 10 Okt</div></div><span class="pill bad"><i></i>Terlambat 26 hari</span></div>
+                    <div class="rowitem warn"><span class="tick"></span><div><div class="t">PT Uji Beban Presisi</div><div class="m">EXP-2026-000046 · Rp 41,63 jt · menunggu PM</div></div><span class="pill warn"><i></i>Persetujuan</span></div>
+                    <div class="rowitem warn"><span class="tick"></span><div><div class="t">Loadbank test &amp; commissioning</div><div class="m">Rencana selesai 8 Nov · progres 15% · bobot 10%</div></div><span class="pill warn"><i></i>Berisiko</span></div>
+                    <div class="rowitem"><span class="tick"></span><div><div class="t">Bengkel Las Baja Ringan</div><div class="m">EXP-2026-000043 · perlu perbaikan bukti nota</div></div><span class="pill mut"><i></i>Dikembalikan</span></div>
+                    <div class="rowitem"><span class="tick"></span><div><div class="t">Panel ATS/AMF · EQP-02</div><div class="m">Anggaran terpakai 100% · sisa Rp 0</div></div><span class="pill bad"><i></i>Pagu penuh</span></div>
+                  </div>
+                </div>
+
+                <div style="display:flex;flex-direction:column;gap:12px">
+                  <div class="card">
+                    <div class="hd"><h4>Portofolio</h4><span class="more">progres fisik vs anggaran</span></div>
+                    <div class="bd" style="display:flex;flex-direction:column;gap:14px">
+                      <div>
+                        <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:11.5px;font-weight:650">PRJ-2026-014 · Genset 2×500 kVA</span><span class="mono" style="font-size:10px;color:var(--muted)">68,7%</span></div>
+                        <div class="bar" style="margin-top:6px"><i style="width:68.7%"></i></div>
+                        <div style="display:flex;justify-content:space-between;margin-top:4px"><span class="hint">Progres fisik</span><span class="hint mono">anggaran 25,6%</span></div>
+                      </div>
+                      <div>
+                        <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:11.5px;font-weight:650">PRJ-2025-009 · LVMDP &amp; ATS</span><span class="mono" style="font-size:10px;color:var(--ok)">100%</span></div>
+                        <div class="bar" style="margin-top:6px"><i style="width:100%;background:var(--ok)"></i></div>
+                        <div style="display:flex;justify-content:space-between;margin-top:4px"><span class="hint">Selesai · BAST 2 · 12 Mar 2026</span><span class="hint mono">retensi Rp 84 jt</span></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="card">
+                    <div class="hd"><h4>Aktivitas terakhir</h4><span class="more">live</span></div>
+                    <div class="rows">
+                      <div class="rowitem"><span class="tick" style="background:var(--signal)"></span><div><div class="t" style="font-size:10.5px">Finance menyetujui EXP-2026-000045 · Rp 12,4 jt</div><div class="m">4 Nov 16.42 · PRJ-2026-014</div></div></div>
+                      <div class="rowitem"><span class="tick" style="background:var(--signal)"></span><div><div class="t" style="font-size:10.5px">Field melaporkan progres kabel 58%</div><div class="m">4 Nov 15.10 · dengan 1 isu akses malam</div></div></div>
+                      <div class="rowitem"><span class="tick"></span><div><div class="t" style="font-size:10.5px">Baseline anggaran internal v1 diaktifkan</div><div class="m">3 Nov 09.02 · oleh PM</div></div></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </figure>
+    </div>
+  </section>
