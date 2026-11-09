@@ -28,6 +28,10 @@ export default function Dashboard({ data, onOpenProject, onCreateExpense, onNavi
   const lateItems = data.schedule.filter((s) => s.plannedEnd && s.plannedEnd < today && s.status !== "DONE");
   const recentExpenses = [...data.expenses].sort((a, b) => (a.transactionDate < b.transactionDate ? 1 : -1)).slice(0, 5);
 
+  /* Kurva kumulatif biaya aktual (disetujui, bukan VOID) sepanjang tahun berjalan.
+     Dihitung dari tanggal transaksi di data yang sudah dimuat — bukan estimasi. */
+  const curve = buildCumulative(data.expenses);
+
   const actions = [
     ...overdueInvoices.map((i) => ({ id: i.id, tone: "danger" as const, icon: FileWarning, title: i.number, meta: `${i.projectCode} · saldo ${formatIDR(i.balance)} · tempo ${formatDate(i.dueDate)}`, badge: "OVERDUE", view: "invoices" })),
     ...pending.slice(0, 3).map((e) => ({ id: e.id, tone: "warn" as const, icon: ClipboardCheck, title: e.merchantName || e.code, meta: `${e.code} · ${formatIDR(e.totalAmount)} menunggu ${e.approverName || "approver"}`, badge: "SUBMITTED", view: "approvals" })),
@@ -113,6 +117,20 @@ export default function Dashboard({ data, onOpenProject, onCreateExpense, onNavi
           </header>
           {projects.length ? projects.map((project) => <PortfolioRow key={project.id} project={project} data={data} onClick={() => onOpenProject(project.id)} />) : <EmptyState icon={<FolderKanban size={16} />} title="Belum ada proyek berjalan" description="Proyek yang sudah dikonversi dari peluang akan muncul di sini." />}
         </section>
+
+        <section className="overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface">
+          <header className="flex items-start justify-between gap-3 border-b border-line px-4 py-3">
+            <div>
+              <h2 className="text-[13px] font-semibold">Biaya aktual kumulatif</h2>
+              <p className="mt-0.5 text-[11px] text-muted">Akumulasi biaya disetujui {curve.year} vs garis kontrak</p>
+            </div>
+            <div className="text-right">
+              <p className="mono text-[17px] font-semibold tracking-[-.03em] text-ink">{formatIDR(curve.total, true)}</p>
+              <p className="text-[10.5px] text-muted">{contract.gt(0) ? `${D(curve.total).div(contract).times(100).toFixed(1)}% dari kontrak` : "belum ada kontrak"}</p>
+            </div>
+          </header>
+          <CumulativeChart curve={curve} />
+        </section>
       </div>
 
       {/* Pengeluaran terbaru + pipeline */}
@@ -196,5 +214,78 @@ function PortfolioRow({ project, data, onClick }: { project: ProjectView; data: 
         </div>
       </div>
     </button>
+  );
+}
+
+/* --- Grafik kumulatif: SVG sebaris, tanpa aset jaringan eksternal -------------
+ * Sumbu Y memakai biaya aktual kumulatif saja (bukan nilai kontrak) supaya
+ * kurva terbaca; garis kontrak ditampilkan sebagai konteks di baris atas.
+ */
+type CurvePoint = { label: string; value: number };
+
+function buildCumulative(expenses: AppData["expenses"]) {
+  /* Basis sama dengan calculateProjectMetrics: baris scope PROJECT saja, memakai
+     lineTotal (DPP tanpa PPN) dan hanya nota berstatus APPROVED. Overhead tidak
+     pernah dihitung sebagai biaya aktual proyek. */
+  const year = new Date().getFullYear();
+  const months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+  const buckets = months.map((label) => ({ label, value: 0 }));
+  for (const e of expenses) {
+    if (e.approvalStatus !== "APPROVED") continue;
+    const d = new Date(e.transactionDate);
+    if (Number.isNaN(d.getTime()) || d.getFullYear() !== year) continue;
+    const amount = e.lines.filter((l) => l.scope === "PROJECT").reduce((sum, l) => sum + (Number(l.lineTotal) || 0), 0);
+    if (amount > 0) buckets[d.getMonth()].value += amount;
+  }
+  let running = 0;
+  const points: CurvePoint[] = buckets.slice(0, new Date().getMonth() + 1).map((b) => {
+    running += b.value;
+    return { label: b.label, value: running };
+  });
+  return { year, points, total: running };
+}
+
+function CumulativeChart({ curve }: { curve: ReturnType<typeof buildCumulative> }) {
+  const [hover, setHover] = useState<number | null>(null);
+  const W = 100, H = 34, pad = 2;
+  const max = Math.max(...curve.points.map((p) => p.value), 1);
+  const pts = curve.points.map((p, i) => {
+    const x = curve.points.length === 1 ? W : (i / (curve.points.length - 1)) * W;
+    const y = H - pad - (p.value / max) * (H - pad * 2);
+    return { ...p, x, y };
+  });
+  const line = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(" ");
+  const area = `${line} L${pts[pts.length - 1].x.toFixed(2)} ${H} L${pts[0].x.toFixed(2)} ${H} Z`;
+  const last = pts[pts.length - 1];
+  const active = hover !== null ? pts[hover] : last;
+  return (
+    <div className="px-4 pb-3 pt-4">
+      <div className="flex items-baseline justify-between text-[10.5px] text-muted">
+        <span className="mono font-semibold text-ink">{formatIDR(active.value.toFixed(2), true)}</span>
+        <span>{active.label} {curve.year}</span>
+      </div>
+      <div className="relative mt-1.5">
+        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="h-[92px] w-full overflow-visible" role="img" aria-label={`Kurva kumulatif biaya aktual ${curve.year}`}>
+          <defs>
+            <linearGradient id="cum-fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--color-ink)" stopOpacity=".16" />
+              <stop offset="100%" stopColor="var(--color-ink)" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          {[0.25, 0.5, 0.75].map((g) => <line key={g} x1="0" x2={W} y1={H * g} y2={H * g} stroke="var(--color-hairline)" strokeWidth=".35" vectorEffect="non-scaling-stroke" />)}
+          <path d={area} fill="url(#cum-fill)" />
+          <path d={line} fill="none" stroke="var(--color-ink)" strokeWidth="1.4" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+          {pts.map((p, i) => (
+            <g key={p.label}>
+              <circle cx={p.x} cy={p.y} r={hover === i ? 1.6 : 1} fill={hover === i ? "var(--color-lime-bright)" : "var(--color-ink)"} stroke="var(--color-surface)" strokeWidth=".5" vectorEffect="non-scaling-stroke" />
+              <rect x={p.x - W / (pts.length * 2)} y={0} width={W / pts.length} height={H} fill="transparent" onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} />
+            </g>
+          ))}
+        </svg>
+        <div className="mt-1 flex justify-between text-[10px] uppercase tracking-[.06em] text-subtle">
+          {pts.map((p, i) => <span key={p.label} className={i === pts.length - 1 ? "font-semibold text-ink" : ""}>{p.label}</span>)}
+        </div>
+      </div>
+    </div>
   );
 }

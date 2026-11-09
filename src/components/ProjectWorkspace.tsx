@@ -127,7 +127,65 @@ function SchedulePanel({ data, project, onSaved }: Props) {
   const items = data.schedule.filter((s) => s.projectId === project.id); const updates = data.progressUpdates.filter((p) => p.projectId === project.id); const [selected, setSelected] = useState<ScheduleView | null>(null); const [saving, setSaving] = useState(false); const [error, setError] = useState(""); const [form, setForm] = useState({ progressPct: "", reportDate: todayJakarta(), note: "", issue: "", quantity: "", unitCode: "" });
   const open = (item: ScheduleView) => { setSelected(item); setForm({ progressPct: item.progressPct, reportDate: todayJakarta(), note: "", issue: "", quantity: "", unitCode: "" }); };
   const save = async () => { if (!selected) return; setSaving(true); setError(""); try { await api(`/api/schedule/${selected.id}/progress`, { method: "POST", body: JSON.stringify({ ...form, clientUuid: uuid() }) }); onSaved(`Progres “${selected.name}” berhasil diperbarui.`); setSelected(null); } catch (e) { setError(e instanceof Error ? e.message : "Update gagal"); } finally { setSaving(false); } };
-  return <div className="grid gap-4 xl:grid-cols-[1.25fr_.75fr]"><section className="overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface"><div className="flex items-center justify-between border-b border-line px-4 py-3"><h2 className="text-[13px] font-semibold">Rencana vs aktual</h2><span className="mono text-[11px] text-muted">{items.length} item</span></div><p className="border-b border-line px-4 py-2 text-[11.5px] text-muted">Bobot item membentuk progres proyek. Item yang melewati rencana dan belum selesai ditandai berisiko.</p><div className="divide-y divide-hairline">{items.map((item) => { const late = item.plannedEnd && item.plannedEnd < todayJakarta() && item.status !== "DONE"; return <div key={item.id} className="px-4 py-3"><div className="flex items-start gap-3"><span className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-[var(--radius-control)] ${item.type === "MILESTONE" ? "bg-ink text-lime" : "bg-paper text-muted"}`}>{item.type === "MILESTONE" ? <Flag size={13} /> : <CalendarDays size={13} />}</span><div className="min-w-0 flex-1"><div className="flex flex-col gap-2 sm:flex-row sm:justify-between"><div><p className="text-[12.5px] font-semibold">{item.name}</p><p className="mt-0.5 text-[11px] text-muted">Bobot {item.weight}% · {formatDate(item.plannedStart)} – {formatDate(item.plannedEnd)}</p></div><div className="flex items-center gap-2">{late ? <Badge value="OVERDUE" /> : <Badge value={item.status} />}{data.user.permissions.includes("progress.create") ? <Button size="sm" variant="ghost" onClick={() => open(item)}>Update</Button> : null}</div></div><div className="mt-3 flex items-center gap-3"><div className="h-2 flex-1 overflow-hidden rounded-full bg-paper-2"><motion.div initial={{ width: 0 }} animate={{ width: `${item.progressPct}%` }} className={`h-full rounded-full ${late ? "bg-danger-bg0" : "bg-ink"}`} /></div><span className="w-12 text-right text-xs font-bold tabular">{item.progressPct}%</span></div></div></div></div>; })}</div></section><section className="rounded-[var(--radius-card)] border border-line bg-surface p-4"><h2 className="text-sm font-semibold">Jejak update lapangan</h2><div className="max-h-[420px] space-y-4 overflow-y-auto px-4 py-3">{updates.length ? updates.map((u) => <div key={u.id} className="relative border-l border-line pl-4"><span className="absolute -left-[4px] top-1 h-2 w-2 rounded-full bg-ink" /><p className="text-[11px] text-muted">{formatDate(u.reportDate)} · {u.createdByName}</p><p className="mt-1 text-[12.5px] font-semibold">{items.find((i) => i.id === u.scheduleItemId)?.name}</p><p className="mt-1.5 text-[11.5px] leading-relaxed text-muted">{u.note}</p>{u.issue ? <p className="mt-2 rounded-[var(--radius-control)] bg-warn-bg p-2 text-[11px] text-warn">Isu: {u.issue}</p> : null}</div>) : <p className="py-6 text-center text-[11.5px] text-muted">Belum ada update progres.</p>}</div></section><Modal open={!!selected} onClose={() => setSelected(null)} title="Update progres lapangan" eyebrow={selected?.name}><div className="grid gap-4 sm:grid-cols-2"><Field label="Tanggal laporan"><Input type="date" value={form.reportDate} onChange={(e) => setForm({ ...form, reportDate: e.target.value })} /></Field><Field label="Progres (%)"><Input inputMode="decimal" value={form.progressPct} onChange={(e) => setForm({ ...form, progressPct: e.target.value })} /></Field><Field label="Kuantitas tercapai (opsional)"><Input value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} /></Field><Field label="Satuan"><Input value={form.unitCode} onChange={(e) => setForm({ ...form, unitCode: e.target.value })} /></Field><Field label="Catatan pekerjaan" className="sm:col-span-2"><Textarea value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} /></Field><Field label="Isu / hambatan" className="sm:col-span-2"><Textarea value={form.issue} onChange={(e) => setForm({ ...form, issue: e.target.value })} /></Field></div>{error ? <p className="mt-3 text-xs text-danger">{error}</p> : null}<Button className="mt-5 w-full" loading={saving} onClick={() => void save()}>Simpan update</Button></Modal></div>;
+  return <div className="grid gap-4 xl:grid-cols-[1.25fr_.75fr]"><section className="overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface"><div className="flex items-center justify-between border-b border-line px-4 py-3"><h2 className="text-[13px] font-semibold">Rencana vs aktual</h2><span className="mono text-[11px] text-muted">{items.length} item</span></div><p className="border-b border-line px-4 py-2 text-[11.5px] text-muted">Bobot item membentuk progres proyek. Item yang melewati rencana dan belum selesai ditandai berisiko.</p><GanttSchedule items={items} canUpdate={data.user.permissions.includes("progress.create")} onOpen={open} />
+</section><section className="rounded-[var(--radius-card)] border border-line bg-surface p-4"><h2 className="text-sm font-semibold">Jejak update lapangan</h2><div className="max-h-[420px] space-y-4 overflow-y-auto px-4 py-3">{updates.length ? updates.map((u) => <div key={u.id} className="relative border-l border-line pl-4"><span className="absolute -left-[4px] top-1 h-2 w-2 rounded-full bg-ink" /><p className="text-[11px] text-muted">{formatDate(u.reportDate)} · {u.createdByName}</p><p className="mt-1 text-[12.5px] font-semibold">{items.find((i) => i.id === u.scheduleItemId)?.name}</p><p className="mt-1.5 text-[11.5px] leading-relaxed text-muted">{u.note}</p>{u.issue ? <p className="mt-2 rounded-[var(--radius-control)] bg-warn-bg p-2 text-[11px] text-warn">Isu: {u.issue}</p> : null}</div>) : <p className="py-6 text-center text-[11.5px] text-muted">Belum ada update progres.</p>}</div></section><Modal open={!!selected} onClose={() => setSelected(null)} title="Update progres lapangan" eyebrow={selected?.name}><div className="grid gap-4 sm:grid-cols-2"><Field label="Tanggal laporan"><Input type="date" value={form.reportDate} onChange={(e) => setForm({ ...form, reportDate: e.target.value })} /></Field><Field label="Progres (%)"><Input inputMode="decimal" value={form.progressPct} onChange={(e) => setForm({ ...form, progressPct: e.target.value })} /></Field><Field label="Kuantitas tercapai (opsional)"><Input value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} /></Field><Field label="Satuan"><Input value={form.unitCode} onChange={(e) => setForm({ ...form, unitCode: e.target.value })} /></Field><Field label="Catatan pekerjaan" className="sm:col-span-2"><Textarea value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} /></Field><Field label="Isu / hambatan" className="sm:col-span-2"><Textarea value={form.issue} onChange={(e) => setForm({ ...form, issue: e.target.value })} /></Field></div>{error ? <p className="mt-3 text-xs text-danger">{error}</p> : null}<Button className="mt-5 w-full" loading={saving} onClick={() => void save()}>Simpan update</Button></Modal></div>;
+}
+
+function GanttSchedule({ items, canUpdate, onOpen }: { items: ScheduleView[]; canUpdate: boolean; onOpen: (item: ScheduleView) => void }) {
+  /* Skala waktu dihitung dari tanggal rencana seluruh item. Bar gelap = porsi
+     yang sudah dicapai (progres item), bar lime = sisa rencana, warna bahaya
+     hanya jika item lewat rencana dan belum selesai. */
+  const today = todayJakarta();
+  const starts = items.map((i) => i.plannedStart).filter(Boolean) as string[];
+  const ends = items.map((i) => i.plannedEnd).filter(Boolean) as string[];
+  if (!starts.length || !ends.length) return <p className="px-4 py-6 text-[11.5px] text-muted">Belum ada tanggal rencana pada item jadwal.</p>;
+  const min = Math.min(...starts.map((d) => Date.parse(d)));
+  const max = Math.max(...ends.map((d) => Date.parse(d)));
+  const span = Math.max(max - min, 864e5);
+  const at = (d: string | null) => (d ? Math.max(0, Math.min(100, ((Date.parse(d) - min) / span) * 100)) : 0);
+  const todayAt = Date.parse(today) >= min && Date.parse(today) <= max ? at(today) : null;
+  return (
+    <div className="overflow-hidden">
+      <div className="hidden grid-cols-[minmax(180px,240px)_1fr_96px] gap-3 border-b border-line bg-sunken px-4 py-2 text-[10px] font-bold uppercase tracking-[.1em] text-subtle sm:grid">
+        <span>Item pekerjaan</span>
+        <span className="relative">
+          {[0, 0.25, 0.5, 0.75, 1].map((g) => <span key={g} className="absolute -translate-x-1/2" style={{ left: `${g * 100}%` }}>{formatDate(new Date(min + span * g).toISOString().slice(0, 10))}</span>)}
+        </span>
+        <span className="text-right">Progres</span>
+      </div>
+      <div>
+        {items.map((item) => {
+          const late = !!item.plannedEnd && item.plannedEnd < today && item.status !== "DONE";
+          const left = at(item.plannedStart);
+          const width = Math.max(2, at(item.plannedEnd) - left);
+          const done = Math.max(0, Math.min(100, Number(item.progressPct) || 0));
+          return (
+            <div key={item.id} className="grid grid-cols-1 gap-2 border-b border-hairline px-4 py-2.5 last:border-0 hover:bg-paper sm:grid-cols-[minmax(180px,240px)_1fr_96px] sm:items-center sm:gap-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-[var(--radius-control-sm)] ${item.type === "MILESTONE" ? "bg-ink text-lime" : "bg-paper-2 text-muted"}`}>{item.type === "MILESTONE" ? <Flag size={11} /> : <CalendarDays size={11} />}</span>
+                <button onClick={() => canUpdate && onOpen(item)} className="min-w-0 flex-1 text-left">
+                  <span className="block truncate text-[12px] font-semibold">{item.name}</span>
+                  <span className="mt-0.5 block truncate text-[10.5px] text-muted">Bobot {item.weight}% · {formatDate(item.plannedStart)}–{formatDate(item.plannedEnd)}</span>
+                </button>
+              </div>
+              <div className="relative h-6">
+                <div className="absolute inset-x-0 top-1/2 h-px bg-hairline" />
+                {todayAt !== null ? <div className="absolute top-0 h-full w-px bg-risk/60" style={{ left: `${todayAt}%` }} aria-hidden /> : null}
+                <div className={`absolute top-1/2 h-[10px] -translate-y-1/2 overflow-hidden rounded-[3px] border ${late ? "border-danger-line bg-danger-bg" : "border-line-strong bg-paper-2"}`} style={{ left: `${left}%`, width: `${width}%` }} title={`${item.name} · ${item.progressPct}%`}>
+                  <div className={late ? "h-full bg-danger" : "h-full bg-ink"} style={{ width: `${done}%` }} />
+                </div>
+                {item.actualEnd ? <span className="absolute top-1/2 h-[3px] w-[3px] -translate-y-1/2 rounded-full bg-ok" style={{ left: `calc(${at(item.actualEnd)}% - 1.5px)` }} aria-hidden /> : null}
+              </div>
+              <div className="flex items-center justify-between gap-2 sm:justify-end">
+                {late ? <Badge value="OVERDUE" /> : <Badge value={item.status} />}
+                <span className={`mono w-9 text-right text-[11px] font-semibold ${late ? "text-danger" : "text-ink"}`}>{done.toFixed(0)}%</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function ProcurementPanel({ data, project, onSaved, onCreateExpense, onCreatePurchase, onBillPurchase }: Props) {
