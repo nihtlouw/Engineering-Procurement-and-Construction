@@ -16,16 +16,17 @@ import { api } from "@/lib/client";
 import { formatDate, formatIDR } from "@/lib/format";
 
 const navItems = [
-  { id: "dashboard", label: "Ikhtisar", icon: LayoutDashboard, permission: "portfolio.view" },
-  { id: "projects", label: "Proyek", icon: FolderKanban },
-  { id: "approvals", label: "Persetujuan", icon: ClipboardCheck },
-  { id: "expenses", label: "Pengeluaran", icon: CircleDollarSign },
-  { id: "invoices", label: "Tagihan", icon: BriefcaseBusiness, permission: "invoice.view" },
-  { id: "documents", label: "Dokumen", icon: FileText, permission: "document.view" },
-  { id: "opportunities", label: "Peluang", icon: BriefcaseBusiness, permission: "opportunity.view" },
-  { id: "activity", label: "Audit Trail", icon: Activity, permission: "audit.view" },
-  { id: "settings", label: "Pengaturan", icon: Settings, permission: "settings.manage" },
+  { id: "dashboard", label: "Ikhtisar", icon: LayoutDashboard, permission: "portfolio.view", group: "Kerja" },
+  { id: "projects", label: "Proyek", icon: FolderKanban, group: "Kerja" },
+  { id: "approvals", label: "Persetujuan", icon: ClipboardCheck, group: "Kerja" },
+  { id: "expenses", label: "Pengeluaran", icon: CircleDollarSign, group: "Kerja" },
+  { id: "invoices", label: "Tagihan", icon: BriefcaseBusiness, permission: "invoice.view", group: "Komersial" },
+  { id: "documents", label: "Dokumen", icon: FileText, permission: "document.view", group: "Komersial" },
+  { id: "opportunities", label: "Peluang", icon: BriefcaseBusiness, permission: "opportunity.view", group: "Komersial" },
+  { id: "activity", label: "Audit Trail", icon: Activity, permission: "audit.view", group: "Sistem" },
+  { id: "settings", label: "Pengaturan", icon: Settings, permission: "settings.manage", group: "Sistem" },
 ];
+const NAV_GROUPS = ["Kerja", "Komersial", "Sistem"];
 type Composer = "expense" | "purchase" | "invoice" | "document" | null;
 
 export default function EPCApp({ initialData }: { initialData: AppData }) {
@@ -61,26 +62,38 @@ export default function EPCApp({ initialData }: { initialData: AppData }) {
   const logout = async () => { await api("/api/auth/logout", { method: "POST" }); router.refresh(); };
   const openExpense = (po?: PurchaseView) => { setPurchasePrefill(po || null); setComposer("expense"); };
   return <div className="min-h-dvh bg-paper lg:flex"><aside className="sticky top-0 z-40 hidden h-dvh w-[236px] shrink-0 flex-col border-r border-white/[.06] bg-ink-900 text-white lg:flex">
-      <div className="flex h-[60px] items-center gap-2.5 border-b border-white/[.07] px-4">
-        <span className="grid h-8 w-8 place-items-center rounded-[7px] bg-lime text-ink"><Zap size={15} fill="currentColor" /></span>
-        <div><p className="text-[12.5px] font-bold tracking-[-.01em]">ARDAYA EPC</p><p className="text-[11px] uppercase tracking-[.14em] text-[#B4BCB7]">Project control</p></div>
+      <div className="flex h-[58px] items-center gap-2.5 border-b border-white/[.06] px-4">
+        <span className="grid h-7 w-7 place-items-center rounded-[7px] bg-lime text-[13px] font-extrabold text-ink">A</span>
+        <div className="min-w-0"><p className="truncate text-[12px] font-bold tracking-[.01em]">ARDAYA EPC</p><p className="text-[9.5px] uppercase tracking-[.16em] text-[#7d8a83]">Project control</p></div>
       </div>
-      <nav className="flex-1 overflow-y-auto px-2.5 py-4">
-        <p className="mb-1.5 px-2 text-[11px] font-semibold uppercase tracking-[.13em] text-[#B4BCB7]">Ruang kerja</p>
-        <div className="space-y-0.5">
-          {allowedNav.map((item) => (
-            <button key={item.id} onClick={() => navigate(item.id)} className={`relative flex h-[34px] w-full items-center gap-2.5 rounded-[var(--radius-control)] px-2 text-left text-[12.5px] transition-colors ${view === item.id ? "bg-surface/[.07] font-semibold text-white" : "text-[#B4BCB7] hover:bg-surface/[.04] hover:text-white"}`}>
-              {view === item.id ? <motion.span layoutId="nav-active" className="absolute -left-2.5 h-4 w-[2.5px] rounded-full bg-lime" /> : null}
-              <item.icon size={15} className={view === item.id ? "text-lime" : ""} />
-              <span className="flex-1">{item.label}</span>
-              {item.id === "approvals" && pendingCount ? <span className="grid h-[18px] min-w-[18px] place-items-center rounded-full bg-lime px-1 text-[11px] font-bold text-ink">{pendingCount}</span> : null}
-            </button>
-          ))}
-        </div>
+      <div className="mx-2.5 mt-2.5 flex items-center gap-2 rounded-[var(--radius-control)] border border-white/[.07] bg-white/[.03] px-2.5 py-1.5">
+        <span className="h-[6px] w-[6px] shrink-0 rounded-full bg-lime" />
+        <span className="min-w-0 flex-1 truncate text-[11px] text-[#cfd8d2]">PT Ardaya Energi Sistem</span>
+        <ChevronDown size={12} className="shrink-0 text-[#7d8a83]" />
+      </div>
+      <nav className="flex-1 overflow-y-auto px-2.5 pb-3 pt-1.5">
+        {NAV_GROUPS.map((group) => {
+          const items = allowedNav.filter((n) => n.group === group);
+          if (!items.length) return null;
+          return (
+            <div key={group} className="mt-2.5 first:mt-1">
+              <p className="mb-1 px-2 text-[9.5px] font-bold uppercase tracking-[.16em] text-[#66736b]">{group}</p>
+              <div className="space-y-0.5">
+                {items.map((item) => (
+                  <button key={item.id} onClick={() => navigate(item.id)} className={`relative flex h-[32px] w-full items-center gap-2.5 rounded-[var(--radius-control)] px-2 text-left text-[12px] transition-colors ${view === item.id ? "bg-lime font-semibold text-ink" : "text-[#b9c4bd] hover:bg-white/[.05] hover:text-white"}`}>
+                    <item.icon size={14} className={view === item.id ? "text-ink" : "opacity-80"} />
+                    <span className="flex-1 truncate">{item.label}</span>
+                    {item.id === "approvals" && pendingCount ? <span className={`grid h-[17px] min-w-[17px] place-items-center rounded-full px-1 text-[10px] font-bold ${view === item.id ? "bg-ink/15 text-ink" : "bg-lime text-ink"}`}>{pendingCount}</span> : null}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </nav>
-      <div className="mx-2.5 mb-2.5 rounded-[var(--radius-control)] border border-white/[.07] bg-surface/[.03] p-3">
-        <div className="flex items-center gap-1.5 text-[#B4BCB7]"><ShieldCheck size={13} className="text-lime" /><span className="text-[11px] font-semibold uppercase tracking-[.1em]">Kontrol aktif</span></div>
-        <p className="mt-1.5 text-[11px] leading-relaxed text-[#B4BCB7]">RBAC, cakupan proyek, DPP, separation of duty, audit append only.</p>
+      <div className="mx-2.5 mb-2.5 rounded-[var(--radius-control)] border border-white/[.07] bg-white/[.02] px-2.5 py-2">
+        <div className="flex items-center gap-1.5"><ShieldCheck size={12} className="text-lime" /><span className="text-[9.5px] font-bold uppercase tracking-[.14em] text-[#7d8a83]">Kontrol aktif</span></div>
+        <p className="mt-1 text-[10px] leading-relaxed text-[#7d8a83]">RBAC, cakupan proyek, DPP, separation of duty, audit append only.</p>
       </div>
       <button onClick={() => setProfileOpen(!profileOpen)} className="flex items-center gap-2.5 border-t border-white/[.07] px-3 py-3 text-left hover:bg-surface/[.03]">
         <span className="grid h-7 w-7 place-items-center rounded-full bg-lime text-[11px] font-bold text-ink">{data.user.name.split(" ").map((n) => n[0]).slice(0, 2).join("")}</span>
@@ -92,15 +105,16 @@ export default function EPCApp({ initialData }: { initialData: AppData }) {
     <div className="min-w-0 flex-1"><header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-line bg-paper/92 px-4 backdrop-blur-md sm:px-5">
         {isPending ? <span className="absolute inset-x-0 bottom-[-1px] h-[2px] overflow-hidden bg-lime-soft" aria-hidden><span className="block h-full w-1/3 animate-[pending-slide_1.1s_ease-in-out_infinite] rounded-full bg-lime-bright" /></span> : null}
         <button onClick={() => setMobileNav(true)} className="grid h-8 w-8 shrink-0 place-items-center rounded-[var(--radius-control)] border border-line-strong bg-surface text-ink hover:bg-paper-2 lg:hidden" aria-label="Buka navigasi"><Menu size={17} /></button>
-        <div className="hidden min-w-0 items-baseline gap-2 md:flex">
-          <span className="text-[11.5px] text-muted">Ardaya EPC /</span>
-          <span className="truncate text-[12px] font-semibold text-ink">{allowedNav.find((n) => n.id === view)?.label}</span>
-          {view === "projects" && project ? <span className="mono hidden truncate text-[11px] text-muted lg:inline">{project.code}</span> : null}
+        <div className="hidden min-w-0 items-center gap-1.5 md:flex">
+          <span className="text-[11px] text-subtle">Ardaya</span>
+          <span className="text-[11px] text-line-strong">/</span>
+          <span className="truncate text-[11.5px] font-semibold text-ink">{allowedNav.find((n) => n.id === view)?.label}</span>
+          {view === "projects" && project ? <><span className="text-[11px] text-line-strong">/</span><span className="mono hidden truncate text-[11px] text-muted lg:inline">{project.code}</span></> : null}
         </div>
         {view === "projects" && data.projects.length > 1 ? <SelectProject projects={data.projects} value={project?.id || ""} onChange={(id) => { setProjectId(id); localStorage.setItem("epc-project", id); }} /> : null}
         <div className="relative ml-auto w-full max-w-[280px] sm:w-64">
           <Search size={14} className="absolute left-2.5 top-2.5 text-subtle" />
-          <Input value={search} onFocus={() => setSearchOpen(true)} onChange={(e) => { setSearch(e.target.value); setSearchOpen(true); }} placeholder="Cari proyek, biaya, invoice" aria-label="Cari" className="min-h-8 h-8 bg-surface pl-8 text-[12px]" />
+          <Input value={search} onFocus={() => setSearchOpen(true)} onChange={(e) => { setSearch(e.target.value); setSearchOpen(true); }} placeholder="Cari proyek, biaya, atau invoice" aria-label="Cari" className="min-h-8 h-8 rounded-[var(--radius-control)] bg-surface pl-8 text-[11.5px]" />
           {searchOpen && search ? <><button className="fixed inset-0 z-10 cursor-default" onClick={() => setSearchOpen(false)} aria-label="Tutup pencarian" /><motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .14 }} className="absolute left-0 right-0 top-10 z-20 overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface shadow-[var(--shadow-e3)]">{searchResults.length ? searchResults.map((r) => <button key={`${r.type}-${r.id}`} onClick={() => { if (r.type === "Proyek") selectProject(r.id); else navigate(r.view); setSearch(""); }} className="flex w-full items-center gap-2.5 border-b border-hairline p-2.5 text-left last:border-0 hover:bg-paper"><span className="rounded border border-line bg-paper-2 px-1.5 py-0.5 text-[11px] font-semibold text-muted">{r.type}</span><span className="min-w-0 flex-1"><span className="block truncate text-[12.5px] font-semibold">{r.title}</span><span className="mt-0.5 block truncate text-[11px] text-muted">{r.meta}</span></span><ChevronRight size={13} className="text-subtle" /></button>) : <p className="p-4 text-center text-[12.5px] text-muted">Tidak ada hasil dalam cakupan akses Anda.</p>}</motion.div></> : null}
         </div>
         <div className="relative">
@@ -110,9 +124,9 @@ export default function EPCApp({ initialData }: { initialData: AppData }) {
         <button onClick={() => setProfileOpen(!profileOpen)} className="grid h-8 w-8 place-items-center rounded-full bg-ink text-[11px] font-bold text-lime lg:hidden">{data.user.name[0]}</button>
         <AnimatePresence>{profileOpen ? <><button className="fixed inset-0 z-40" onClick={() => setProfileOpen(false)} /><motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: .14 }} className="absolute bottom-[68px] left-3 z-50 w-60 rounded-[var(--radius-card)] border border-line bg-surface p-3 text-ink shadow-[var(--shadow-e3)] lg:bottom-3 lg:left-3"><p className="text-[13px] font-semibold">{data.user.name}</p><p className="mt-0.5 text-[11.5px] text-muted">{data.user.email}</p><div className="mt-2"><Badge value={data.user.role} label={data.user.title} /></div><Button variant="ghost" size="sm" className="mt-3 w-full justify-start" onClick={() => void logout()}><LogOut size={14} />Keluar / ganti peran</Button></motion.div></> : null}</AnimatePresence>
       </header>
-      <main className="px-4 pb-24 pt-5 sm:px-5 sm:pb-24 lg:px-6 lg:pb-10 lg:pt-5"><AnimatePresence mode="wait"><motion.div key={view} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: .16, ease: [0.22, 1, 0.36, 1] }}>{view === "dashboard" ? <Dashboard data={data} onOpenProject={selectProject} onCreateExpense={() => openExpense()} onNavigate={navigate} /> : view === "projects" && project ? <ProjectWorkspace data={data} project={project} tab={projectTab} onTab={changeTab} onSaved={saved} onCreateExpense={() => openExpense()} onCreatePurchase={() => setComposer("purchase")} onBillPurchase={(po) => openExpense(po)} onCreateInvoice={() => setComposer("invoice")} onCreateDocument={() => setComposer("document")} /> : view === "approvals" ? <ApprovalInbox data={data} onSaved={saved} /> : view === "expenses" ? <ExpenseLedger data={data} onCreate={() => openExpense()} onSaved={saved} /> : view === "invoices" ? <InvoiceCenter data={data} onSaved={saved} onCreate={() => setComposer("invoice")} /> : view === "documents" ? <DocumentsCenter data={data} onSaved={saved} onCreate={() => setComposer("document")} /> : view === "opportunities" ? <Opportunities data={data} onOpenProject={selectProject} /> : view === "activity" ? <AuditTrail activities={data.activities} projects={data.projects} /> : view === "settings" ? <SettingsView data={data} onSaved={saved} /> : <EmptyState icon={<Compass size={18} />} title="Modul tidak tersedia" description="Modul ini di luar cakupan peran Anda. Hubungi admin proyek bila aksesnya diperlukan." />}</motion.div></AnimatePresence></main>
+      <main className="px-4 pb-24 pt-5 sm:px-5 sm:pb-24 lg:px-7 lg:pb-10 lg:pt-6"><AnimatePresence mode="wait"><motion.div key={view} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: .16, ease: [0.22, 1, 0.36, 1] }}>{view === "dashboard" ? <Dashboard data={data} onOpenProject={selectProject} onCreateExpense={() => openExpense()} onNavigate={navigate} /> : view === "projects" && project ? <ProjectWorkspace data={data} project={project} tab={projectTab} onTab={changeTab} onSaved={saved} onCreateExpense={() => openExpense()} onCreatePurchase={() => setComposer("purchase")} onBillPurchase={(po) => openExpense(po)} onCreateInvoice={() => setComposer("invoice")} onCreateDocument={() => setComposer("document")} /> : view === "approvals" ? <ApprovalInbox data={data} onSaved={saved} /> : view === "expenses" ? <ExpenseLedger data={data} onCreate={() => openExpense()} onSaved={saved} /> : view === "invoices" ? <InvoiceCenter data={data} onSaved={saved} onCreate={() => setComposer("invoice")} /> : view === "documents" ? <DocumentsCenter data={data} onSaved={saved} onCreate={() => setComposer("document")} /> : view === "opportunities" ? <Opportunities data={data} onOpenProject={selectProject} /> : view === "activity" ? <AuditTrail activities={data.activities} projects={data.projects} /> : view === "settings" ? <SettingsView data={data} onSaved={saved} /> : <EmptyState icon={<Compass size={18} />} title="Modul tidak tersedia" description="Modul ini di luar cakupan peran Anda. Hubungi admin proyek bila aksesnya diperlukan." />}</motion.div></AnimatePresence></main>
     </div>
-    <nav className="fixed inset-x-3 bottom-3 z-30 flex items-center justify-around rounded-[var(--radius-card)] border border-white/10 bg-ink-900/96 p-1 text-white shadow-[var(--shadow-e3)] backdrop-blur-xl lg:hidden">{allowedNav.filter((n) => ["dashboard", "projects", "approvals", "expenses", "invoices"].includes(n.id)).slice(0, 4).map((item) => <button key={item.id} onClick={() => navigate(item.id)} className={`flex min-h-12 min-w-14 flex-col items-center justify-center gap-1 rounded-[var(--radius-control)] text-[11px] font-medium ${view === item.id ? "bg-surface/[.07] text-lime" : "text-[#B4BCB7]"}`}><item.icon size={17} />{item.label}</button>)}</nav>
+    <nav className="fixed inset-x-3 bottom-3 z-30 flex items-center justify-around rounded-[var(--radius-card)] border border-white/10 bg-ink-900/96 p-1 text-white shadow-[var(--shadow-e3)] backdrop-blur-xl lg:hidden">{allowedNav.filter((n) => ["dashboard", "projects", "approvals", "expenses", "invoices"].includes(n.id)).slice(0, 4).map((item) => <button key={item.id} onClick={() => navigate(item.id)} className={`relative flex min-h-12 min-w-14 flex-col items-center justify-center gap-1 rounded-[var(--radius-control)] text-[10.5px] font-medium transition-colors ${view === item.id ? "text-lime" : "text-[#b9c4bd]"}`}>{view === item.id ? <span className="absolute inset-x-2 top-0 h-[2px] rounded-full bg-lime" /> : null}<item.icon size={17} />{item.label}</button>)}</nav>
     <ExpenseComposer data={data} open={composer === "expense"} onClose={() => { setComposer(null); setPurchasePrefill(null); }} onSaved={saved} projectId={project?.id} purchase={purchasePrefill} />
     <PurchaseComposer data={data} open={composer === "purchase"} onClose={() => setComposer(null)} onSaved={saved} projectId={project?.id} />
     <InvoiceComposer data={data} open={composer === "invoice"} onClose={() => setComposer(null)} onSaved={saved} projectId={project?.id} />
