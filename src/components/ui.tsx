@@ -242,16 +242,20 @@ export type Column<T> = {
  * Header menempel saat digulir dan tinggi baris dijaga CSS (.dt) supaya
  * angka tabular tetap sejajar antar panel.
  */
-export function DataTable<T>({ columns, rows, density = "comfortable", minWidth = 900, rowKey, onRowClick, rowClassName, empty }: {
+export function DataTable<T>({ columns, rows, density = "comfortable", minWidth = 900, rowKey, onRowClick, rowClassName, empty, mobileCards }: {
   columns: Column<T>[]; rows: T[]; density?: "comfortable" | "compact"; minWidth?: number;
   rowKey: (row: T) => string; onRowClick?: (row: T) => void;
   rowClassName?: (row: T) => string; empty?: ReactNode;
+  /** Di layar <640px, tabel lebar diganti kartu bertumpuk. Default aktif untuk kepadatan nyaman. */
+  mobileCards?: boolean;
 }) {
   if (!rows.length) return <>{empty}</>;
   const pad = density === "compact" ? "px-3" : "px-4";
+  const cards = mobileCards ?? density === "comfortable";
+  const [head, ...rest] = columns;
   return (
     <div className="overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface">
-      <div className="overflow-x-auto">
+      <div className={`overflow-x-auto ${cards ? "hidden sm:block" : ""}`}>
         <table className="dt w-full border-collapse text-left" data-density={density} style={{ minWidth }}>
           <thead>
             <tr>
@@ -271,6 +275,25 @@ export function DataTable<T>({ columns, rows, density = "comfortable", minWidth 
           </tbody>
         </table>
       </div>
+      {cards ? (
+        <ul className="divide-y divide-hairline sm:hidden">
+          {rows.map((row) => (
+            <li key={rowKey(row)} className={rowClassName?.(row) || ""}>
+              <div onClick={onRowClick ? () => onRowClick(row) : undefined} className="px-3 py-2.5">
+                <div className="text-[12.5px]">{head.cell(row)}</div>
+                <dl className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1">
+                  {rest.map((c) => (
+                    <div key={c.key} className="min-w-0">
+                      <dt className="text-[9.5px] font-bold uppercase tracking-[.1em] text-subtle">{c.header || "·"}</dt>
+                      <dd className={`mt-0.5 truncate text-[11.5px] ${c.align === "right" ? "text-right" : ""}`}>{c.cell(row)}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }
