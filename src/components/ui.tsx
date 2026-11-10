@@ -193,14 +193,15 @@ export function Skeleton({ className = "" }: { className?: string }) {
 }
 
 
-export function TableSkeleton({ rows = 5, cols = 4 }: { rows?: number; cols?: number }) {
+export function TableSkeleton({ rows = 5, cols = 4, density = "comfortable" }: { rows?: number; cols?: number; density?: "comfortable" | "compact" }) {
+  const pad = density === "compact" ? "px-3 py-2" : "px-4 py-3";
   return (
     <div className="overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface" aria-hidden>
-      <div className="flex gap-4 border-b border-line bg-sunken px-4 py-2.5">
+      <div className={`flex gap-4 border-b border-line bg-sunken ${density === "compact" ? "px-3 py-2" : "px-4 py-2.5"}`}>
         {Array.from({ length: cols }).map((_, i) => <div key={i} className="skeleton h-[11px]" style={{ width: i === 0 ? "32%" : `${14}%` }} />)}
       </div>
       {Array.from({ length: rows }).map((_, r) => (
-        <div key={r} className="flex items-center gap-4 border-b border-hairline px-4 py-3 last:border-0">
+        <div key={r} className={`flex items-center gap-4 border-b border-hairline last:border-0 ${pad}`}>
           {Array.from({ length: cols }).map((_, c) => <div key={c} className="skeleton h-[12px]" style={{ width: c === 0 ? "32%" : "14%" }} />)}
         </div>
       ))}
@@ -224,6 +225,75 @@ export function PanelSkeleton({ rows = 4 }: { rows?: number }) {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+export type Column<T> = {
+  key: string; header: string; align?: "left" | "right";
+  width?: string; className?: string;
+  cell: (row: T) => ReactNode;
+};
+
+/**
+ * Tabel bersama dengan dua kepadatan:
+ * - "comfortable" 40px → halaman kerja (buku biaya, tagihan, anggaran)
+ * - "compact" 30px     → daftar panjang & panel samping (Ikhtisar)
+ * Header menempel saat digulir dan tinggi baris dijaga CSS (.dt) supaya
+ * angka tabular tetap sejajar antar panel.
+ */
+export function DataTable<T>({ columns, rows, density = "comfortable", minWidth = 900, rowKey, onRowClick, rowClassName, empty, mobileCards }: {
+  columns: Column<T>[]; rows: T[]; density?: "comfortable" | "compact"; minWidth?: number;
+  rowKey: (row: T) => string; onRowClick?: (row: T) => void;
+  rowClassName?: (row: T) => string; empty?: ReactNode;
+  /** Di layar <640px, tabel lebar diganti kartu bertumpuk. Default aktif untuk kepadatan nyaman. */
+  mobileCards?: boolean;
+}) {
+  if (!rows.length) return <>{empty}</>;
+  const pad = density === "compact" ? "px-3" : "px-4";
+  const cards = mobileCards ?? density === "comfortable";
+  const [head, ...rest] = columns;
+  return (
+    <div className="overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface">
+      <div className={`overflow-x-auto ${cards ? "hidden sm:block" : ""}`}>
+        <table className="dt w-full border-collapse text-left" data-density={density} style={{ minWidth }}>
+          <thead>
+            <tr>
+              {columns.map((c) => (
+                <th key={c.key} scope="col" style={c.width ? { width: c.width } : undefined} className={`${pad} ${c.align === "right" ? "text-right" : ""}`}>{c.header}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={rowKey(row)} onClick={onRowClick ? () => onRowClick(row) : undefined} className={`${onRowClick ? "cursor-pointer" : ""} ${rowClassName?.(row) || ""}`}>
+                {columns.map((c) => (
+                  <td key={c.key} className={`${pad} ${c.align === "right" ? "text-right" : ""} ${c.className || ""}`}>{c.cell(row)}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {cards ? (
+        <ul className="divide-y divide-hairline sm:hidden">
+          {rows.map((row) => (
+            <li key={rowKey(row)} className={rowClassName?.(row) || ""}>
+              <div onClick={onRowClick ? () => onRowClick(row) : undefined} className="px-3 py-2.5">
+                <div className="text-[12.5px]">{head.cell(row)}</div>
+                <dl className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1">
+                  {rest.map((c) => (
+                    <div key={c.key} className="min-w-0">
+                      <dt className="text-[9.5px] font-bold uppercase tracking-[.1em] text-subtle">{c.header || "·"}</dt>
+                      <dd className={`mt-0.5 truncate text-[11.5px] ${c.align === "right" ? "text-right" : ""}`}>{c.cell(row)}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }

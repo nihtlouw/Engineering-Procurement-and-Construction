@@ -216,6 +216,21 @@ p { text-wrap: pretty; }
 .stageband > div[data-state="done"] .st-label { color: var(--color-ink); font-weight: 600; }
 .stageband > div[data-state="now"] .st-label { color: var(--color-ink); font-weight: 700; }
 
+/* Tabel bersama: dua kepadatan (40px nyaman / 30px padat) */
+.dt thead th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--color-sunken);
+  border-bottom: 1px solid var(--color-line);
+  font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--color-subtle); padding-top: 9px; padding-bottom: 9px; white-space: nowrap;
+}
+.dt tbody td { border-bottom: 1px solid var(--color-hairline); font-size: 12.5px; vertical-align: middle; }
+.dt tbody tr:last-child td { border-bottom: 0; }
+.dt tbody tr:hover { background: var(--color-paper); }
+.dt[data-density="comfortable"] tbody td { padding-top: 10px; padding-bottom: 10px; }
+.dt[data-density="compact"] tbody td { padding-top: 6px; padding-bottom: 6px; font-size: 12px; }
+.dt tbody td .mono { white-space: nowrap; }
+
 /* Baris data padat untuk daftar panjang */
 .dense-row { display: grid; align-items: center; gap: 12px; border-bottom: 1px solid var(--color-hairline); }
 .dense-row:last-child { border-bottom: 0; }
