@@ -1,5 +1,7 @@
 import { PDFDocument, StandardFonts, rgb, type PDFPage } from "pdf-lib";
 import type { DocumentBlock } from "@/lib/document-templates";
+import { LABELS } from "@/lib/domain";
+import { getObjectBuffer, type StoredFile } from "@/modules/field-photos/storage";
 
 const SYMBOLS: Record<string, string> = {
   "×": "x", "—": "-", "–": "-", "‘": "'", "’": "'",
@@ -17,6 +19,7 @@ export async function renderDocumentPdf(
   title: string,
   docNumber: string,
   blocks: DocumentBlock[],
+  options: { photoSources?: Record<string, StoredFile> } = {},
 ) {
   const pdf = await PDFDocument.create();
   const font = await pdf.embedFont(StandardFonts.Helvetica);
@@ -138,6 +141,38 @@ export async function renderDocumentPdf(
         page.drawLine({ start: { x: 48, y: y + 4 }, end: { x: 48 + CONTENT_WIDTH, y: y + 4 }, thickness: 0.4, color: rgb(0.88, 0.9, 0.87) });
       }
       y -= 12;
+    }
+    if (block.type === "photoGallery") {
+      ensure(40);
+      wrap(block.heading || "LAMPIRAN FOTO", 48, 11, CONTENT_WIDTH, true, BODY, 16);
+      y -= 8;
+      for (const photo of block.photos) {
+        const source = options.photoSources?.[photo.fileId];
+        if (!source) {
+          ensure(24);
+          draw("Berkas foto tidak tersedia.", 48, 8, false, MUTED);
+          y -= 18;
+          continue;
+        }
+        try {
+          const bytes = await getObjectBuffer(source);
+          const image = await pdf.embedJpg(bytes);
+          const scale = Math.min(1, 240 / image.width, 150 / image.height);
+          const drawWidth = image.width * scale;
+          const drawHeight = image.height * scale;
+          ensure(drawHeight + 42);
+          page.drawImage(image, { x: 48, y: y - drawHeight, width: drawWidth, height: drawHeight });
+          y -= drawHeight + 6;
+          const category = LABELS[photo.category] ?? photo.category;
+          wrap(`${category} — ${photo.caption}`, 48, 8, CONTENT_WIDTH, false, MUTED, 11);
+          y -= 10;
+        } catch {
+          ensure(24);
+          draw("Berkas foto tidak dapat dibaca.", 48, 8, false, MUTED);
+          y -= 18;
+        }
+      }
+      continue;
     }
     if (block.type === "signature") {
       ensure(130);

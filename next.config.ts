@@ -16,7 +16,8 @@ const securityHeaders = [
       "default-src 'self'",
       `script-src ${scriptSrc}`,
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob:",
+      // S3 memakai presigned HTTPS URL untuk <img> galeri; local tetap 'self'.
+      "img-src 'self' data: blob: https:",
       "font-src 'self' data:",
       "connect-src 'self'",
       "object-src 'none'",
@@ -35,6 +36,8 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // Native sharp + AWS SDK harus dimuat dari node_modules, bukan di-bundle.
+  serverExternalPackages: ["sharp", "@aws-sdk/client-s3", "@aws-sdk/s3-request-presigner"],
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];
   },

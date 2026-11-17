@@ -4,12 +4,16 @@ import { z } from "zod";
 import { db } from "@/db";
 import { activityLogs, budgetLines, budgetVersions, changeOrders, clients, companySettings, contractTerms, customerInvoices, documents, fileObjects, projects, scheduleItems, sites, users } from "@/db/schema";
 import { ApiError, assertPermission, errorResponse, requireUser } from "@/lib/auth";
-import { buildBlocks, DOCUMENT_TEMPLATES } from "@/lib/document-templates";
+import { buildBlocks, DOCUMENT_TEMPLATES, PHOTO_MERGE_FIELD } from "@/lib/document-templates";
 import { calculateProjectMetrics, invoiceBalance } from "@/lib/finance";
 import { formatDate, formatIDR, terbilang } from "@/lib/format";
 import { newId, requireProject } from "@/lib/server-services";
+import { attachSelectedPhotosToDocument, getSelectedPhotoRefs } from "@/modules/field-photos/service";
 
 const schema = z.object({ action: z.enum(["CREATE", "UPLOAD"]).default("CREATE"), projectId: z.string(), templateCode: z.string().optional(), relatedType: z.string().optional(), relatedId: z.string().optional(), title: z.string().optional(), category: z.string().optional(), fileId: z.string().optional() });
+const PHOTO_DOCUMENT_TEMPLATES = new Set([
+  "PROGRESS_REPORT", "BA_SURVEY", "BA_MOS", "BA_COMMISSIONING", "BAST1", "BAST2", "CHANGE_ORDER",
+]);
 async function POSTHandler(request: Request) {
   try {
     const user = await requireUser(); const body = schema.parse(await request.json()); await requireProject(user, body.projectId, body.action === "UPLOAD" ? "document.upload" : "gendoc.create");
@@ -49,11 +53,19 @@ async function POSTHandler(request: Request) {
       if (!co || co.projectId !== project.id) throw new ApiError("CHANGE_ORDER_REQUIRED", "Pilih change order dari proyek yang sama.", 422);
       Object.assign(snapshot, { changeOrderCode: co.code, scopeDescription: co.scopeDescription, reason: co.reason, priceImpact: formatIDR(co.priceImpact), timeImpactDays: String(co.timeImpactDays) });
     }
+    // S3: hanya foto yang SUDAH dipilih saat generate yang menjadi snapshot dokumen.
+    const photoRefs = PHOTO_DOCUMENT_TEMPLATES.has(body.templateCode!)
+      ? await getSelectedPhotoRefs(project.id)
+      : [];
+    snapshot[PHOTO_MERGE_FIELD] = JSON.stringify(photoRefs);
     const blocks = buildBlocks(body.templateCode!, snapshot); const id = newId();
     const title = body.title || `${DOCUMENT_TEMPLATES.find((t) => t.code === body.templateCode)?.name} — ${project.code}`;
-    await db.insert(documents).values({ id, projectId: project.id, relatedType: body.relatedType, relatedId: body.relatedId, category: body.templateCode?.startsWith("BAST") ? "BA" : body.templateCode === "INVOICE" ? "OTHER" : "OTHER", title, templateCode: body.templateCode!, templateVersion: 1, mergeSnapshot: snapshot, blocks, status: "DRAFT", uploadedById: user.id });
-    await db.insert(activityLogs).values({ id: newId(), actorId: user.id, objectType: "DOCUMENT", objectId: id, projectId: project.id, action: "GENERATED", changes: [{ field: "templateCode", old: null, new: body.templateCode }, { field: "mergeSnapshot", old: null, new: "SNAPSHOT_STORED" }] });
-    return Response.json({ data: { id, blocks, mergeSnapshot: snapshot } }, { status: 201 });
+    await db.transaction(async (tx) => {
+      await tx.insert(documents).values({ id, projectId: project.id, relatedType: body.relatedType, relatedId: body.relatedId, category: body.templateCode?.startsWith("BAST") ? "BA" : body.templateCode === "INVOICE" ? "OTHER" : "OTHER", title, templateCode: body.templateCode!, templateVersion: 1, mergeSnapshot: snapshot, blocks, status: "DRAFT", uploadedById: user.id });
+      await attachSelectedPhotosToDocument(user, id, photoRefs, tx);
+      await tx.insert(activityLogs).values({ id: newId(), actorId: user.id, objectType: "DOCUMENT", objectId: id, projectId: project.id, action: "GENERATED", changes: [{ field: "templateCode", old: null, new: body.templateCode }, { field: "mergeSnapshot", old: null, new: "SNAPSHOT_STORED" }, { field: "photoCount", old: null, new: photoRefs.length }] });
+    });
+    return Response.json({ data: { id, blocks, mergeSnapshot: snapshot, photoCount: photoRefs.length } }, { status: 201 });
   } catch (error) { return errorResponse(error); }
 }
 

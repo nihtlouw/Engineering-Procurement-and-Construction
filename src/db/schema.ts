@@ -249,7 +249,13 @@ export const fileObjects = pgTable("file_objects", {
   mimeType: text("mime_type").notNull(),
   sizeBytes: integer("size_bytes").notNull(),
   sha256: text("sha256").notNull(),
-  contentBase64: text("content_base64").notNull(),
+  // S3: NULL untuk file baru yang tersimpan di LOCAL/S3, bukan base64 di DB.
+  contentBase64: text("content_base64"),
+  storageProvider: text("storage_provider").notNull().default("DB"),
+  storageBucket: text("storage_bucket"),
+  width: integer("width"),
+  height: integer("height"),
+  originalSizeBytes: integer("original_size_bytes"),
   uploadedById: text("uploaded_by_id").notNull().references(() => users.id),
   createdAt: createdAt(),
 });
@@ -643,3 +649,40 @@ export const poItems = pgTable("po_items", {
   receivedQty: quantity("received_qty"),
   sortOrder: integer("sort_order").notNull().default(0),
 }, (table) => [index("po_items_po_idx").on(table.purchaseRecordId, table.sortOrder)]);
+
+
+/* -------------------------------------------------------------------------- */
+/* S3 · Field photos                                                          */
+/* -------------------------------------------------------------------------- */
+
+export const fieldPhotos = pgTable("field_photos", {
+  id: id(),
+  companyId: uuid("company_id").notNull().default(sql`app_current_company_id()`),
+  projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  fileId: text("file_id").notNull().references(() => fileObjects.id, { onDelete: "restrict" }),
+  category: text("category").notNull(),
+  capturedAt: date("captured_at").notNull(),
+  description: text("description"),
+  locationLabel: text("location_label"),
+  isSelectedForReport: boolean("is_selected_for_report").notNull().default(false),
+  sortOrder: integer("sort_order").notNull().default(0),
+  uploadedById: text("uploaded_by_id").notNull().references(() => users.id),
+  createdAt: createdAt(),
+}, (table) => [
+  index("field_photos_project_date_idx").on(table.companyId, table.projectId, table.capturedAt, table.category),
+  index("field_photos_selected_idx").on(table.companyId, table.projectId, table.isSelectedForReport),
+  uniqueIndex("field_photos_file_unique").on(table.companyId, table.fileId),
+]);
+
+export const documentPhotoLinks = pgTable("document_photo_links", {
+  id: id(),
+  companyId: uuid("company_id").notNull().default(sql`app_current_company_id()`),
+  documentId: text("document_id").notNull().references(() => documents.id, { onDelete: "cascade" }),
+  fieldPhotoId: text("field_photo_id").notNull().references(() => fieldPhotos.id, { onDelete: "cascade" }),
+  sortOrder: integer("sort_order").notNull().default(0),
+  selectedById: text("selected_by_id").notNull().references(() => users.id),
+  createdAt: createdAt(),
+}, (table) => [
+  uniqueIndex("document_photo_links_unique").on(table.documentId, table.fieldPhotoId),
+  index("document_photo_links_document_idx").on(table.companyId, table.documentId, table.sortOrder),
+]);

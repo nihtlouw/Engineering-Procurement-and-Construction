@@ -1,10 +1,10 @@
-# Runbook deploy — S1 (fondasi company / RLS)
+# Runbook deploy — S1 / S2a / S2b / S3
 
 ## Urutan (jangan dibalik)
 
 1. **Backup** database produksi (snapshot + uji restore). Migrasi S1 menambah kolom `NOT NULL` + backfill; tidak ada down script.
-2. Set environment di Vercel: `DATABASE_URL`, `FILE_SIGNING_SECRET` (≥ 32 char acak). Pastikan `SEED_DEMO_PASSWORD` **tidak** diset di production.
-3. Jalankan migrasi dari mesin yang punya akses DB (bukan dari Vercel runtime). Runner otomatis menerapkan `0000 → 0001 → 0002 → 0003`:
+2. Set environment di Vercel: `DATABASE_URL`, `FILE_SIGNING_SECRET` (≥ 32 char acak), dan untuk S3 `FILE_STORAGE_DRIVER=s3` + kredensial bucket privat. Pastikan `SEED_DEMO_PASSWORD` **tidak** diset di production.
+3. Jalankan migrasi dari mesin yang punya akses DB (bukan dari Vercel runtime). Runner otomatis menerapkan `0000 → 0001 → 0002 → 0003 → 0004`:
    ```bash
    npm ci
    cp .env.example .env.local   # isi DATABASE_URL produksi
@@ -39,7 +39,7 @@ Urutan: `npm run db:migrate -- --check` → `npm run db:migrate` → `npm run db
 
 | # | Kriteria S2a | Cara |
 |---|---|---|
-| 1 | Rangkaian 0000–0003 tereksekusi (28 tabel FORCE RLS, 114 policy) | `npm test -- tests/unit/migrations.test.ts` (PGlite, tanpa server DB) |
+| 1 | Rangkaian 0000–0004 tereksekusi (30 tabel FORCE RLS, 122 policy) | `npm test -- tests/unit/migrations.test.ts` (PGlite, tanpa server DB) |
 | 2 | `contract_value_current` ter-backfill dari CO approved lama | test migrasi `backfill contract_value_current` |
 | 3 | Baseline tunggal & immutable | test `partial unique index` + `BUDGET_TRANSITIONS` |
 | 4 | Pagu 90% / 100% / 110% benar (Decimal) | `npm test -- tests/unit/budgeting.test.ts` |
@@ -60,7 +60,7 @@ Urutan: backup → `npm run db:migrate -- --check` → `npm run db:migrate` → 
 
 | # | Kriteria S2b | Cara |
 |---|---|---|
-| 1 | `0003` lolos dari DB pra-S1 tanpa server eksternal | `npm test -- tests/unit/migrations.test.ts` (24 test PGlite) |
+| 1 | `0003`/`0004` lolos dari DB pra-S1 tanpa server eksternal | `npm test -- tests/unit/migrations.test.ts` (28 test PGlite) |
 | 2 | Backfill PO lama jadi satu pos, termin terisi dari invoice existing | test `backfill PO lama menjadi satu pos` |
 | 3 | `qty diterima <= qty pesan` | test CHECK `po_item_received_bounds` |
 | 4 | Pagu termin + kontrak fail-closed; over-invoice butuh alasan + `invoice.approve` | `npm test -- tests/unit/procurement.test.ts` + test trigger PGlite |
@@ -72,12 +72,35 @@ Urutan: backup → `npm run db:migrate -- --check` → `npm run db:migrate` → 
 
 Rincian: [`docs/modules/PROCUREMENT-TERMIN-CO.md`](../modules/PROCUREMENT-TERMIN-CO.md).
 
+## Deploy S3 (Foto lapangan → PDF laporan)
+
+`0004_s3_field_photos.sql` **forward-only**: `content_base64` menjadi nullable, metadata storage ditambahkan, serta 2 tabel baru mendapat `FORCE RLS`. Backup wajib; **tidak ada down script**.
+
+Urutan: backup → `npm run db:migrate -- --check` → `npm run db:migrate` → `npm run db:verify` → isi environment storage produksi → deploy aplikasi → smoke test tab **Foto Lapangan**.
+
+| # | Kriteria S3 | Cara |
+|---|---|---|
+| 1 | `0004` lolos dari DB pra-S1, 30 FORCE RLS / 122 policy | `npm test -- tests/unit/migrations.test.ts` (28 test PGlite) |
+| 2 | Validasi 5 MB, MIME + magic bytes, normalisasi JPEG | `npm test -- tests/unit/field-photos.test.ts` (11 test) |
+| 3 | Filter tanggal inklusif, kategori, selectedOnly | test `filter tanggal & kategori` + smoke UI |
+| 4 | Foto baru tidak menyimpan base64 di DB | cek `file_objects.content_base64 IS NULL AND storage_provider='S3'` setelah unggah |
+| 5 | Signed/presigned URL 5 menit; bucket privat | cek header/URL galeri; tidak ada public-read bucket |
+| 6 | `FIELD` hanya proyek sendiri; `CLIENT_VIEWER` hanya foto terpilih | smoke 2 akun + `requireProject()` / DTO workspace |
+| 7 | `BEFORE/PROCESS/AFTER` muncul dalam PDF final | generate `PROGRESS_REPORT` → preview → `FINALIZE` → unduh PDF |
+| 8 | Build / typecheck / lint / test / audit hijau | lihat tabel S1 |
+| 9 | Smoke produksi S3 | unggah 3 kategori, filter batas tanggal, pilih foto, generate, finalisasi, revisi; lampiran revisi tetap sama |
+
+Rincian: [`docs/modules/FIELD-PHOTOS.md`](../modules/FIELD-PHOTOS.md). **S4 Document Generator penuh tidak termasuk rilis ini.**
+
 ## Variabel environment
 
 | Variabel | Wajib | Catatan |
 |---|---|---|
 | `DATABASE_URL` | ✅ | Pooled (`-pooler`) + `sslmode=require`. Pakai koneksi **transaction pooler** bila memakai Supabase. |
 | `FILE_SIGNING_SECRET` | ✅ prod | ≥ 32 karakter; `openssl rand -hex 32`. Tanpa ini production gagal di request pertama. |
+| `FILE_STORAGE_DRIVER` | ✅ prod S3 | `s3`; `local` ditolak di production karena filesystem Vercel ephemeral. |
+| `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | ✅ prod S3 | Bucket privat S3-compatible; simpan hanya di environment Vercel. |
+| `S3_ENDPOINT`, `S3_FORCE_PATH_STYLE` | ⛔ | Endpoint kustom Supabase/R2/MinIO; `true` bila provider butuh path-style. |
 | `PG_POOL_MAX` | ⛔ | default 10; turunkan bila memakai pooler dengan batas koneksi ketat. |
 | `SEED_DEMO_PASSWORD` | ⛔ | Jangan diset di production. |
 | `ALLOW_DEMO_SEED` | ⛔ | `yes` hanya di environment uji. |
@@ -86,7 +109,7 @@ Rincian: [`docs/modules/PROCUREMENT-TERMIN-CO.md`](../modules/PROCUREMENT-TERMIN
 ## Catatan operasional & risiko sisa
 
 - **Koneksi pool + `SET LOCAL`**: `withCompany()` membungkus tiap request dalam transaksi. Jangan menambah query di luar `companyRoute()`/`withCompany()` — RLS akan menolaknya (fail-closed).
-- **`_migrations`** mencatat file yang sudah diterapkan; jangan mengedit file SQL yang sudah terpakai, buat file baru. `0002` dan `0003` wajib dijalankan manual sebelum production karena Vercel tidak menjalankan migrasi dari runtime aplikasi.
+- **`_migrations`** mencatat file yang sudah diterapkan; jangan mengedit file SQL yang sudah terpakai, buat file baru. `0002`, `0003`, dan `0004` wajib dijalankan manual sebelum production karena Vercel tidak menjalankan migrasi dari runtime aplikasi.
 - **S2a/S2b `app.current_permissions`**: script SQL manual yang tidak menyetel GUC ini akan melihat 0 baris RAB internal (fail-closed) dan tidak dapat meloloskan over-invoice (butuh `invoice.approve`).
 - **Rekalkulasi termin** saat `IMPLEMENT` melewati termin yang sudah ditagihkan (tidak menurunkan nilai di bawah tagihan). S2b memakai `contract_terms.invoiced_amount` yang dijaga trigger sebagai sumber kumulatif; termin `INVOICED` / `CLOSED` atau `is_auto_amount=false` tidak diubah otomatis.
 - **Keanggotaan proyek** (`project_members`) wajib ada untuk peran non-ADMIN; `npm run db:seed:demo` sudah mengisinya, produksi harus dipastikan manual.
@@ -94,4 +117,4 @@ Rincian: [`docs/modules/PROCUREMENT-TERMIN-CO.md`](../modules/PROCUREMENT-TERMIN
 - **Token undangan** belum dikirim email — admin menyalin tautan manual. Integrasi email/SSO menyusul.
 - **Rate limit login** berbasis tabel `auth_events`; belum ada lockout per akun/MFA.
 - **`npm audit --omit=dev`** masih menyisakan 2 temuan *moderate* pada `exceljs`/`uuid` (tidak ada patch tanpa major downgrade). Risiko diterima sadar; dievaluasi saat sprint QA.
-- **Signed URL file** tetap 5 menit dan file masih berupa `base64` di DB — migrasi ke object storage ada di S3 (Field Photos).
+- **Signed URL file** tetap 5 menit. File lama dan PDF final masih memakai `base64` di DB (`storage_provider='DB'`); **foto lapangan baru** tersimpan di object `LOCAL`/`S3` dan DB hanya menyimpan metadata. Kredensial/bucket nyata tidak tersedia di sandbox, jadi smoke S3 produksi wajib dilakukan operator.
