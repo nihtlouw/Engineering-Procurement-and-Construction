@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { expenses, fileObjects } from "@/db/schema";
 import { errorResponse, requireUser } from "@/lib/auth";
 import { parseIndonesianNumber } from "@/lib/format";
+import { getObjectBuffer, type StoredFile } from "@/modules/field-photos/storage";
 
 export const maxDuration = 60;
 const schema = z.object({ fileId: z.string() });
@@ -18,7 +19,7 @@ async function POSTHandler(request: Request) {
     const [linked] = await db.select().from(expenses).where(eq(expenses.receiptFileId, fileId)).limit(1);
     if (linked) await db.update(expenses).set({ ocrStatus: "PROCESSING" }).where(eq(expenses.id, linked.id));
     try {
-      const result = await recognize(Buffer.from(file.contentBase64, "base64"), "eng");
+      const result = await recognize(await getObjectBuffer(file as StoredFile), "eng");
       const text = result.data.text; const textLines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
       const findAmount = (patterns: RegExp) => {
         const line = textLines.find((l) => patterns.test(l));

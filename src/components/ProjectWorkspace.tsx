@@ -7,13 +7,14 @@ import { DocumentsCenter } from "@/components/DocumentsView";
 import { Badge, Button, DataTable, EmptyState, Field, Input, Modal, PanelSkeleton, SegmentedControl, Select, TableSkeleton, Textarea } from "@/components/ui";
 import { LABELS, STAGES } from "@/lib/domain";
 import BudgetingPanel from "@/modules/budgeting/ui/BudgetingPanel";
+import FieldPhotosPanel from "@/modules/field-photos/ui/FieldPhotosPanel";
 import ProcurementS2bPanel from "@/modules/procurement/ui/ProcurementPanel";
 import { api, uuid } from "@/lib/client";
 import { D, formatDate, formatIDR, todayJakarta } from "@/lib/format";
 
 type Notify = (message: string) => void;
 type Props = { data: AppData; project: ProjectView; tab: string; onTab: (tab: string) => void; onSaved: Notify; onCreateExpense: () => void; onCreatePurchase: () => void; onBillPurchase: (po: PurchaseView) => void; onCreateInvoice: () => void; onCreateDocument: () => void };
-const tabs = [{ id: "summary", label: "Ringkasan" }, { id: "budget", label: "Lingkup & Anggaran" }, { id: "budgeting", label: "RAB & PTK" }, { id: "poTerms", label: "PO & Termin" }, { id: "schedule", label: "Jadwal & Progres" }, { id: "procurement", label: "Pengadaan & Biaya" }, { id: "billing", label: "Tagihan" }, { id: "changes", label: "Change Order" }, { id: "handover", label: "Serah Terima" }, { id: "documents", label: "Dokumen" }];
+const tabs = [{ id: "summary", label: "Ringkasan" }, { id: "budget", label: "Lingkup & Anggaran" }, { id: "budgeting", label: "RAB & PTK" }, { id: "poTerms", label: "PO & Termin" }, { id: "schedule", label: "Jadwal & Progres" }, { id: "procurement", label: "Pengadaan & Biaya" }, { id: "billing", label: "Tagihan" }, { id: "changes", label: "Change Order" }, { id: "handover", label: "Serah Terima" }, { id: "fieldPhotos", label: "Foto Lapangan" }, { id: "documents", label: "Dokumen" }];
 
 export default function ProjectWorkspace(props: Props) {
   const { data, project, tab, onTab } = props; const m = data.metrics[project.id];
@@ -44,7 +45,7 @@ export default function ProjectWorkspace(props: Props) {
       </div>
     </div>
     <div key={`${project.id}-${tab}`}>
-      {!m ? <div className="space-y-4"><PanelSkeleton rows={5} /><TableSkeleton rows={4} cols={5} /></div> : tab === "summary" ? <Summary {...props} /> : tab === "budget" ? <BudgetPanel {...props} /> : tab === "budgeting" ? <BudgetingPanel data={data} project={project} onSaved={props.onSaved} /> : tab === "poTerms" ? <ProcurementS2bPanel data={data} project={project} onSaved={props.onSaved} /> : tab === "schedule" ? <SchedulePanel {...props} /> : tab === "procurement" ? <ProcurementPanel {...props} /> : tab === "billing" ? <BillingPanel {...props} /> : tab === "changes" ? <ChangeOrderPanel {...props} /> : tab === "handover" ? <HandoverPanel {...props} /> : <DocumentsCenter data={data} projectId={project.id} onSaved={props.onSaved} onCreate={props.onCreateDocument} />}</div>
+      {!m ? <div className="space-y-4"><PanelSkeleton rows={5} /><TableSkeleton rows={4} cols={5} /></div> : tab === "summary" ? <Summary {...props} /> : tab === "budget" ? <BudgetPanel {...props} /> : tab === "budgeting" ? <BudgetingPanel data={data} project={project} onSaved={props.onSaved} /> : tab === "poTerms" ? <ProcurementS2bPanel data={data} project={project} onSaved={props.onSaved} /> : tab === "schedule" ? <SchedulePanel {...props} /> : tab === "procurement" ? <ProcurementPanel {...props} /> : tab === "billing" ? <BillingPanel {...props} /> : tab === "changes" ? <ChangeOrderPanel {...props} /> : tab === "handover" ? <HandoverPanel {...props} /> : tab === "fieldPhotos" ? <FieldPhotosPanel data={data} project={project} onSaved={props.onSaved} /> : <DocumentsCenter data={data} projectId={project.id} onSaved={props.onSaved} onCreate={props.onCreateDocument} />}</div>
   </div>;
 
 }

@@ -4,7 +4,7 @@ Aplikasi manajemen proyek EPC: proyek & klien, PO, RAB, biaya, tagihan, dokumen,
 **Modular monolith**: Next.js 16 App Router · React 19 · TypeScript (strict) · Tailwind 4 · Drizzle ORM + `pg` → PostgreSQL (Neon/Supabase) · Zod · decimal.js · pdf-lib · exceljs. Deploy: Vercel.
 
 > Baseline kondisi & roadmap: [`docs/AUDIT-EPC-2026-11-17.md`](docs/AUDIT-EPC-2026-11-17.md).
-> Status saat ini: **S1 + S2a + S2b selesai** — fondasi company/RLS/Auth, RAB/PTK, serta PO/termin/CO. Modul lain menyusul per sprint.
+> Status saat ini: **S1 + S2a + S2b + S3 selesai** — fondasi company/RLS/Auth, RAB/PTK, PO/termin/CO, serta foto lapangan dalam PDF laporan. **S4 Document Generator penuh ditunda.**
 
 ## Setup lokal
 
@@ -60,6 +60,16 @@ Rincian desain, matriks peran, API, dan acceptance criteria: [`docs/modules/BUDG
 
 Rincian: [`docs/modules/PROCUREMENT-TERMIN-CO.md`](docs/modules/PROCUREMENT-TERMIN-CO.md).
 
+## S3 — Foto lapangan masuk laporan dokumentasi
+
+- Unggah `BEFORE` / `PROCESS` / `AFTER` maksimal **5 MB** lewat tab **Foto Lapangan**. MIME + magic bytes divalidasi, EXIF dirotasi, lalu `sharp` menormalkan ke JPEG; **bytes tidak disimpan sebagai base64 di DB**.
+- Dev/test memakai storage `LOCAL`; production memakai bucket S3-compatible privat dengan presigned GET **5 menit**. Vercel filesystem ephemeral, jadi driver `local` ditolak di production.
+- Filter tanggal inklusif, kategori, dan “hanya masuk laporan”. `CLIENT_VIEWER` hanya melihat foto yang diproyeksikan ke laporan; `FIELD` hanya unggah pada proyeknya sendiri.
+- Saat generate `PROGRESS_REPORT`, BA/BAST, atau `CHANGE_ORDER`, foto terpilih disimpan sebagai snapshot `{{#photos}}` + `document_photo_links`; finalisasi menyematkan gambar ke PDF. Revisi tidak mengubah lampiran FINAL lama.
+- Migrasi `0004_s3_field_photos.sql` menambah metadata storage, `field_photos`, `document_photo_links`, composite company FK, dan `FORCE RLS` (total **30 tabel / 122 policy**).
+
+Rincian: [`docs/modules/FIELD-PHOTOS.md`](docs/modules/FIELD-PHOTOS.md).
+
 ## Perintah
 
 | Perintah | Kegunaan |
@@ -81,6 +91,9 @@ Rincian: [`docs/modules/PROCUREMENT-TERMIN-CO.md`](docs/modules/PROCUREMENT-TERM
 |---|---|---|
 | `DATABASE_URL` | ✅ | Pooled connection string + `sslmode=require` |
 | `FILE_SIGNING_SECRET` | ✅ production | ≥ 32 karakter acak; `openssl rand -hex 32` |
+| `FILE_STORAGE_DRIVER` | ✅ production | `s3`; `local` hanya untuk dev/test |
+| `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | ✅ production | Bucket privat S3-compatible; jangan commit kredensial |
+| `S3_ENDPOINT`, `S3_FORCE_PATH_STYLE` | ⛔ | untuk Supabase/R2/MinIO |
 | `PG_POOL_MAX` | ⛔ | default 10 |
 | `SEED_DEMO_PASSWORD` | ⛔ | hanya untuk seed CLI |
 | `ALLOW_DEMO_SEED` | ⛔ | `yes` hanya di environment uji |
@@ -95,6 +108,7 @@ src/
 ├── app/(app)/            # workspace (SSR) + loading/error boundaries
 ├── modules/budgeting/    # S2a: types, validation, pagu, service, UI
 ├── modules/procurement/  # S2b: types, validation, service, UI
+├── modules/field-photos/ # S3: validation, filter, image, storage, service, UI
 ├── app/api/              # route handler, dibungkus companyRoute()/publicRoute()
 ├── app/accept-invite/    # halaman penerimaan undangan
 ├── modules/companies/    # modul pertama: types, validation, service, ui
@@ -112,6 +126,7 @@ tests/                    # unit + integrasi
 - `docs/AUDIT-EPC-2026-11-17.md` — audit, 10 masalah, arsitektur, roadmap, addendum budgeting/PTK.
 - `docs/modules/BUDGETING-PTK.md` — desain S2a.
 - `docs/modules/PROCUREMENT-TERMIN-CO.md` — desain S2b, API, migrasi, dan acceptance criteria.
+- `docs/modules/FIELD-PHOTOS.md` — desain S3, storage, `{{#photos}}`, keamanan, dan acceptance criteria.
 - `docs/TUTORIAL-DAN-UJI-SCOPE.md` — tutorial & skenario uji (sebagian mengacu UI pra-S1).
 - `docs/RINGKASAN-DESAIN-UI.md` — keputusan desain antarmuka.
 - `public/docs/Panduan-Ardaya-EPC.pdf` — panduan pemakaian (21 halaman, bahasa Indonesia).

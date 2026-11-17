@@ -13,3 +13,4 @@ dev.err
 *.zip
 .vercel/
 .pglite-data/
+.local-storage/

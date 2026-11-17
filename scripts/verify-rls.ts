@@ -4,7 +4,8 @@
  *   npm run db:migrate && npm run db:verify
  *
  * Membuat 2 company sementara, menyisipkan 1 klien di masing-masing, lalu
- * menguji 4 invariant. Seluruh data uji dibersihkan di akhir.
+ * menguji isolasi, audit append-only, dan invariant storage foto S3.
+ * Seluruh data uji dibersihkan di akhir.
  */
 import { randomBytes } from "node:crypto";
 import { config } from "dotenv";
@@ -80,6 +81,24 @@ async function main() {
     } catch { auditImmutable = true; }
     check("Audit log append-only", auditImmutable,
       auditImmutable ? "UPDATE ditolak trigger DB" : "UPDATE audit LOLOS (bahaya)");
+    // 5-7. Invariant S3: tabel foto ber-RLS, policy lengkap, content_base64 nullable.
+    const photoTables = await db.query(`SELECT count(*)::int AS n FROM pg_class
+      WHERE relname = ANY(ARRAY['field_photos','document_photo_links'])
+        AND relrowsecurity AND relforcerowsecurity`);
+    const photoTableCount = Number(photoTables.rows[0].n);
+    check("S3 field photos FORCE RLS", photoTableCount === 2,
+      `${photoTableCount}/2 tabel foto memakai ENABLE + FORCE RLS`);
+    const photoPolicies = await db.query(`SELECT count(*)::int AS n FROM pg_policy p
+      JOIN pg_class c ON c.oid = p.polrelid
+      WHERE c.relname = ANY(ARRAY['field_photos','document_photo_links'])`);
+    const photoPolicyCount = Number(photoPolicies.rows[0].n);
+    check("S3 policy isolasi foto", photoPolicyCount === 8,
+      `${photoPolicyCount}/8 policy isolasi pada 2 tabel foto`);
+    const contentColumn = await db.query(`SELECT is_nullable FROM information_schema.columns
+      WHERE table_schema='public' AND table_name='file_objects' AND column_name='content_base64'`);
+    const nullable = contentColumn.rows[0]?.is_nullable === "YES";
+    check("S3 content_base64 nullable", nullable,
+      nullable ? "foto baru boleh menyimpan bytes di object storage" : "kolom belum nullable / tabel tidak ada");
   } finally {
     // Bersihkan data uji.
     try {

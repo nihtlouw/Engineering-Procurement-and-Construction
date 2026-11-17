@@ -11,6 +11,7 @@ import type { ProjectMetric, SessionUser, WorkspaceData } from "@/lib/domain";
 import { buildCloseCheck, calculateProjectMetrics, displayInvoiceStatus, invoiceBalance } from "@/lib/finance";
 import { D, money } from "@/lib/format";
 import { listCompaniesForUser } from "@/modules/companies/service";
+import { listWorkspaceFieldPhotos } from "@/modules/field-photos/service";
 
 export async function getWorkspaceData(user: SessionUser): Promise<WorkspaceData> {
   const [
@@ -119,6 +120,9 @@ export async function getWorkspaceData(user: SessionUser): Promise<WorkspaceData
     ...invoice, projectCode: projectRows.find((p) => p.id === invoice.projectId)?.code, balance: money(invoiceBalance(invoice)), displayStatus: displayInvoiceStatus(invoice),
   })) : [];
   const visibleDocuments = hasPermission(user, "document.view") ? documentRows.filter((d) => !d.projectId || allowedIds.includes(d.projectId)).map((d) => ({ ...d, fileUrl: fileUrl(d.fileId), projectCode: projectRows.find((p) => p.id === d.projectId)?.code })) : [];
+  // S3: CLIENT_VIEWER hanya menerima foto yang sudah diproyeksikan ke laporan.
+  const visibleFieldPhotos = (await listWorkspaceFieldPhotos(user, allowedIds, expires))
+    .filter((photo) => user.role !== "CLIENT_VIEWER" || photo.isSelectedForReport === true);
 
   /* ---- S1 · Redaksi payload (audit #3) ----------------------------------
    * Proyeksi per permission, BUKAN redaksi setelah mengirim: objek yang
@@ -188,6 +192,7 @@ export async function getWorkspaceData(user: SessionUser): Promise<WorkspaceData
     changeOrders: canClient ? changeRows.filter((c) => allowedIds.includes(c.projectId)).map((c) => { const serialized: Record<string, unknown> = { ...c, createdByName: userMap.get(c.createdById)?.name }; if (!canInternal) delete serialized.costImpact; return serialized; }) : [],
     punchItems: punchRows.filter((p) => allowedIds.includes(p.projectId)), handoverItems: handoverRows.filter((h) => allowedIds.includes(h.projectId)),
     documents: visibleDocuments,
+    fieldPhotos: visibleFieldPhotos,
     activities: hasPermission(user, "audit.view") ? activityRows.filter((a) => !a.projectId || allowedIds.includes(a.projectId)).map((a) => ({ ...a, actorName: a.actorId ? userMap.get(a.actorId)?.name : "Sistem" })) : [],
     notifications: notificationRows, metrics, closeChecks,
   };

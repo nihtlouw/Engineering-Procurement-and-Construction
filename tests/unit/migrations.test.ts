@@ -4,7 +4,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { beforeAll, afterAll, describe, expect, it } from "vitest";
 
 /**
- * Uji SELURUH migrasi (0000 → 0001 → 0002 → 0003) dari database kosong TANPA server
+ * Uji SELURUH migrasi (0000 → 0001 → 0002 → 0003 → 0004) dari database kosong TANPA server
  * Postgres eksternal. PGlite = Postgres (WASM) in-process. Baseline di bawah
  * meniru skema 28 tabel pra-S1; bukan pengganti `npm run db:verify` pada DB nyata.
  */
@@ -106,7 +106,7 @@ INSERT INTO customer_invoices (id,project_id,contract_term_id,number,type,total_
   await db.exec(ddl);
 
   const dir = path.resolve(process.cwd(), "drizzle");
-  for (const file of ["0000_tenant_foundation.sql", "0001_rls_policies.sql", "0002_s2a_budgeting_ptk.sql", "0003_s2b_po_terms_co.sql"]) {
+  for (const file of ["0000_tenant_foundation.sql", "0001_rls_policies.sql", "0002_s2a_budgeting_ptk.sql", "0003_s2b_po_terms_co.sql", "0004_s3_field_photos.sql"]) {
     await db.exec(readFileSync(path.join(dir, file), "utf8"));
   }
   // PGlite default = superuser (BYPASSRLS). Neon/Supabase memakai role non-superuser.
@@ -145,15 +145,15 @@ describe("migrasi S1 dari database pra-S1", () => {
 });
 
 describe("migrasi S2a", () => {
-  it("mengaktifkan ENABLE + FORCE RLS pada 28 tabel bisnis", async () => {
-    const list = [...TABLES, "variation_orders", "variation_order_lines", "budget_phasing", "po_items"].map((t) => `'${t}'`).join(",");
+  it("mengaktifkan ENABLE + FORCE RLS pada 30 tabel bisnis", async () => {
+    const list = [...TABLES, "variation_orders", "variation_order_lines", "budget_phasing", "po_items", "field_photos", "document_photo_links"].map((t) => `'${t}'`).join(",");
     const r = await rows(`SELECT relname FROM pg_class WHERE relname = ANY(ARRAY[${list}]) AND relrowsecurity AND relforcerowsecurity`);
-    expect(r).toHaveLength(28);
+    expect(r).toHaveLength(30);
   });
 
-  it("membuat 114 policy (112 company isolation + 2 RESTRICTIVE internal)", async () => {
+  it("membuat 122 policy (120 company isolation + 2 RESTRICTIVE internal)", async () => {
     const r = await rows("SELECT count(*)::int AS n FROM pg_policy");
-    expect(r[0].n).toBe(114);
+    expect(r[0].n).toBe(122);
     const restrictive = await rows("SELECT count(*)::int AS n FROM pg_policy WHERE polpermissive = false");
     expect(restrictive[0].n).toBe(2);
   });
@@ -312,5 +312,82 @@ describe("migrasi S2b", () => {
     await scope(String(other.id), "budget.internal.view,budget.client.view");
     expect(await rows("SELECT id FROM po_items")).toHaveLength(0);
     await scope("", "");
+  });
+});
+
+describe("migrasi S3 field photos", () => {
+  const defaultScope = async () => {
+    const [a] = await rows("SELECT id FROM companies WHERE slug='default'");
+    await scope(String(a.id), "budget.internal.view,budget.client.view,document.view");
+    return String(a.id);
+  };
+
+  it("file_objects.content_base64 nullable + metadata storage", async () => {
+    await defaultScope();
+    const columns = await rows(`SELECT column_name, is_nullable, column_default FROM information_schema.columns
+      WHERE table_name='file_objects' AND column_name IN
+      ('content_base64','storage_provider','storage_bucket','width','height','original_size_bytes')`);
+    expect(columns).toHaveLength(6);
+    expect(columns.find((c) => c.column_name === "content_base64")?.is_nullable).toBe("YES");
+    const [file] = await rows(`INSERT INTO file_objects
+      (id,storage_key,file_name,mime_type,size_bytes,sha256,uploaded_by_id)
+      VALUES ('f-s3-1','private/field-photos/p1/f-s3-1.jpg','foto.jpg','image/jpeg',100,'hash-1','u-admin')
+      RETURNING content_base64, storage_provider`);
+    expect(file.content_base64).toBeNull();
+    expect(file.storage_provider).toBe("DB");
+  });
+
+  it("CHECK provider storage menolak nilai selain DB/LOCAL/S3", async () => {
+    await defaultScope();
+    await expect(db.exec(`INSERT INTO file_objects
+      (id,storage_key,file_name,mime_type,size_bytes,sha256,uploaded_by_id,storage_provider)
+      VALUES ('f-s3-bad','private/bad','bad.jpg','image/jpeg',1,'hash-bad','u-admin','FTP');`)).rejects.toThrow();
+  });
+
+  it("field_photos menyimpan metadata, kategori, tanggal, dan status pilihan laporan", async () => {
+    await defaultScope();
+    await db.exec(`INSERT INTO file_objects
+      (id,storage_key,file_name,mime_type,size_bytes,sha256,uploaded_by_id,storage_provider,width,height,original_size_bytes)
+      VALUES ('f-s3-2','private/field-photos/p1/f-s3-2.jpg','before.jpg','image/jpeg',80,'hash-2','u-admin','LOCAL',1200,900,900000),
+             ('f-s3-3','private/field-photos/p1/f-s3-3.jpg','process.jpg','image/jpeg',81,'hash-3','u-admin','LOCAL',1200,900,910000),
+             ('f-s3-4','private/field-photos/p1/f-s3-4.jpg','after.jpg','image/jpeg',82,'hash-4','u-admin','LOCAL',1200,900,920000),
+             ('f-s3-5','private/field-photos/p-new/f-s3-5.jpg','other.jpg','image/jpeg',83,'hash-5','u-admin','LOCAL',1200,900,930000);
+    INSERT INTO field_photos
+      (id,project_id,file_id,category,captured_at,description,location_label,is_selected_for_report,uploaded_by_id)
+      VALUES ('fp-1','p1','f-s3-2','BEFORE','2026-11-01','Kondisi awal','Grid A',true,'u-admin'),
+             ('fp-2','p1','f-s3-3','PROCESS','2026-11-02','Pemasangan','Grid A',false,'u-admin'),
+             ('fp-3','p1','f-s3-4','AFTER','2026-11-03','Selesai','Grid A',false,'u-admin'),
+             ('fp-4','p-new','f-s3-5','PROCESS','2026-11-02','Proyek lain','Grid B',false,'u-admin');`);
+    const all = await rows("SELECT category, captured_at, is_selected_for_report FROM field_photos WHERE project_id='p1' ORDER BY captured_at");
+    expect(all.map((r) => r.category)).toEqual(["BEFORE", "PROCESS", "AFTER"]);
+    expect(all[0].is_selected_for_report).toBe(true);
+    const filtered = await rows(`SELECT category FROM field_photos
+      WHERE project_id='p1' AND captured_at BETWEEN DATE '2026-11-01' AND DATE '2026-11-02'
+      ORDER BY captured_at`);
+    expect(filtered.map((r) => r.category)).toEqual(["BEFORE", "PROCESS"]);
+    await expect(db.exec(`INSERT INTO field_photos
+      (id,project_id,file_id,category,captured_at,uploaded_by_id)
+      VALUES ('fp-bad','p1','f-s3-2','OTHER','2026-11-01','u-admin');`)).rejects.toThrow();
+  });
+
+  it("document_photo_links menolak foto lintas proyek dan memaksa RLS", async () => {
+    const defaultCompany = await defaultScope();
+    await db.exec(`INSERT INTO documents (id,project_id,template_code,status)
+      VALUES ('doc-s3','p1','PROGRESS_REPORT','DRAFT');`);
+    await db.exec(`INSERT INTO document_photo_links
+      (id,document_id,field_photo_id,sort_order,selected_by_id)
+      VALUES ('dpl-1','doc-s3','fp-1',0,'u-admin');`);
+    await expect(db.exec(`INSERT INTO document_photo_links
+      (id,document_id,field_photo_id,sort_order,selected_by_id)
+      VALUES ('dpl-bad','doc-s3','fp-4',1,'u-admin');`)).rejects.toThrow();
+    let [other] = await rows("SELECT id FROM companies WHERE slug='other'");
+    if (!other) {
+      await db.exec("INSERT INTO companies (slug,name,legal_name) VALUES ('other','Other','Other');");
+      [other] = await rows("SELECT id FROM companies WHERE slug='other'");
+    }
+    await scope(String(other.id), "document.view");
+    expect(await rows("SELECT id FROM field_photos")).toHaveLength(0);
+    expect(await rows("SELECT id FROM document_photo_links")).toHaveLength(0);
+    await scope(defaultCompany, "budget.internal.view,budget.client.view,document.view");
   });
 });

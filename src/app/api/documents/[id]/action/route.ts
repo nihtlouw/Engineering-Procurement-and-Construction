@@ -5,9 +5,10 @@ import { z } from "zod";
 import { db } from "@/db";
 import { activityLogs, documents, fileObjects, projects } from "@/db/schema";
 import { ApiError, assertPermission, errorResponse, requireUser } from "@/lib/auth";
-import type { DocumentBlock } from "@/lib/document-templates";
+import { PHOTO_MERGE_FIELD, withPhotoRefs, type DocumentBlock } from "@/lib/document-templates";
 import { renderDocumentPdf } from "@/lib/pdf";
 import { newId, requireProject } from "@/lib/server-services";
+import { copyDocumentPhotoLinksForRevision, getDocumentPhotoBundle } from "@/modules/field-photos/service";
 
 const roman = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
 const schema = z.object({ action: z.enum(["FINALIZE", "REVISE"]) });
@@ -22,16 +23,20 @@ async function POSTHandler(request: Request, { params }: { params: Promise<{ id:
       await db.transaction(async (tx) => {
         await tx.update(documents).set({ status: "SUPERSEDED" }).where(eq(documents.id, id));
         await tx.insert(documents).values({ id: newDocId, projectId: doc.projectId, relatedType: doc.relatedType, relatedId: doc.relatedId, category: doc.category, title: doc.title, versionNo: doc.versionNo, revisionNo: doc.revisionNo + 1, templateCode: doc.templateCode, templateVersion: doc.templateVersion, mergeSnapshot: doc.mergeSnapshot, blocks: doc.blocks, status: "DRAFT", uploadedById: user.id });
+        await copyDocumentPhotoLinksForRevision(tx, id, newDocId, user.id);
         await tx.insert(activityLogs).values({ id: newId(), actorId: user.id, objectType: "DOCUMENT", objectId: newDocId, projectId: doc.projectId, action: "REVISED", changes: [{ field: "revisionNo", old: doc.revisionNo, new: doc.revisionNo + 1 }, { field: "previousDocumentId", old: null, new: doc.id }] });
       });
       return Response.json({ data: { id: newDocId } }, { status: 201 });
     }
     if (doc.status !== "DRAFT" && doc.status !== "IN_REVIEW") throw new ApiError("DOCUMENT_LOCKED", "Dokumen FINAL tidak dapat diubah. Buat revisi baru.", 409);
+    const snapshot = (doc.mergeSnapshot ?? {}) as Record<string, string>;
+    const photoBundle = await getDocumentPhotoBundle(id, snapshot[PHOTO_MERGE_FIELD]);
+    const blocks = withPhotoRefs((doc.blocks ?? []) as DocumentBlock[], photoBundle.refs);
     const result = await db.transaction(async (tx) => {
       await tx.execute(sql`select pg_advisory_xact_lock(771204)`); const [row] = await tx.select({ value: count() }).from(documents).where(isNotNull(documents.docNumber));
       const now = new Date(); const year = now.getFullYear(); const seq = Number(row.value) + 1;
       const docNumber = `${String(seq).padStart(3, "0")}/${doc.templateCode}/EPC/${roman[now.getMonth()]}/${year}`;
-      const pdf = await renderDocumentPdf(doc.title, docNumber, (doc.blocks ?? []) as DocumentBlock[]); const fileId = newId();
+      const pdf = await renderDocumentPdf(doc.title, docNumber, blocks, { photoSources: photoBundle.sources }); const fileId = newId();
       await tx.insert(fileObjects).values({ id: fileId, storageKey: `private/generated/${doc.projectId}/${docNumber.replace(/\//g, "-")}-r${doc.revisionNo}.pdf`, fileName: `${doc.title.replace(/[^a-zA-Z0-9]+/g, "-")}.pdf`, mimeType: "application/pdf", sizeBytes: pdf.length, sha256: createHash("sha256").update(pdf).digest("hex"), contentBase64: pdf.toString("base64"), uploadedById: user.id });
       await tx.update(documents).set({ status: "FINAL", docNumber, fileId, finalizedAt: new Date() }).where(eq(documents.id, id));
       if (["BAST1", "BAST2"].includes(doc.templateCode)) {

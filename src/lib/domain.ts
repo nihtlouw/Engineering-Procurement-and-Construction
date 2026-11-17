@@ -62,6 +62,7 @@ export const LABELS: Record<string, string> = {
   CLARIFICATION: "Klarifikasi", FINAL_DOC: "Final", ACTIVE: "Aktif", IMPLEMENTED: "Diimplementasikan", AWAITING_CLIENT: "Menunggu Klien",
   ADD: "Pekerjaan Tambah", OMIT: "Pekerjaan Kurang", SUBSTITUTE: "Substitusi", ADJUST: "Disesuaikan",
   OPEN: "Belum Ditagih", PARTIALLY_INVOICED: "Sebagian Ditagih", INVOICED: "Ditagih Penuh",
+  BEFORE: "Sebelum", PROCESS: "Proses", AFTER: "Sesudah",
 };
 
 /**
@@ -111,6 +112,7 @@ export type WorkspaceData = {
   punchItems: Record<string, unknown>[];
   handoverItems: Record<string, unknown>[];
   documents: Record<string, unknown>[];
+  fieldPhotos: Record<string, unknown>[];
   activities: Record<string, unknown>[];
   notifications: Record<string, unknown>[];
   metrics: Record<string, ProjectMetric>;
