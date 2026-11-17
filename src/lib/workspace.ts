@@ -1,6 +1,5 @@
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { ensureSeed } from "@/db/seed";
 import {
   activityLogs, budgetLines, budgetVersions, changeOrders, clients, companySettings, contractTerms,
   costCategories, customerInvoices, customerPayments, documents, expenseLines, expenses, handoverItems,
@@ -8,12 +7,12 @@ import {
   scheduleItems, sites, units, users,
 } from "@/db/schema";
 import { hasPermission, safeUser, signFileToken } from "@/lib/auth";
-import type { ProjectMetric, SafeUser, WorkspaceData } from "@/lib/domain";
+import type { ProjectMetric, SessionUser, WorkspaceData } from "@/lib/domain";
 import { buildCloseCheck, calculateProjectMetrics, displayInvoiceStatus, invoiceBalance } from "@/lib/finance";
 import { D, money } from "@/lib/format";
+import { listCompaniesForUser } from "@/modules/companies/service";
 
-export async function getWorkspaceData(user: SafeUser): Promise<WorkspaceData> {
-  await ensureSeed();
+export async function getWorkspaceData(user: SessionUser): Promise<WorkspaceData> {
   const [
     allUsers, settingsRows, clientRows, siteRows, opportunityRows, projectRows, memberRows, categoryRows, unitRows,
     budgetRows, budgetLineRows, expenseRows, expenseLineRows, purchaseRows, invoiceRows, paymentRows, termRows,
@@ -103,12 +102,52 @@ export async function getWorkspaceData(user: SafeUser): Promise<WorkspaceData> {
   })) : [];
   const visibleDocuments = hasPermission(user, "document.view") ? documentRows.filter((d) => !d.projectId || allowedIds.includes(d.projectId)).map((d) => ({ ...d, fileUrl: fileUrl(d.fileId), projectCode: projectRows.find((p) => p.id === d.projectId)?.code })) : [];
 
+  /* ---- S1 · Redaksi payload (audit #3) ----------------------------------
+   * Proyeksi per permission, BUKAN redaksi setelah mengirim: objek yang
+   * dikirim memang tidak memuat field yang tidak berhak dilihat peran.
+   * `safeUsers`, `clientRows`, `siteRows`, `projectRows` tetap dipakai penuh
+   * di server untuk kalkulasi metrik & resolusi nama.
+   * --------------------------------------------------------------------- */
+  const isAdmin = user.companyRole === "ADMIN";
+  const canSeeDirectory = isAdmin || user.companyRole === "FINANCE" || hasPermission(user, "settings.manage");
+  const visibleDirectory = canSeeDirectory
+    ? safeUsers.filter((u) => isAdmin || memberRows.some((m) => m.userId === u.id && allowedIds.includes(m.projectId)))
+    : [];
+  const publicClients = clientRows.map((c) => ({
+    id: c.id, code: c.code, legalName: c.legalName, displayName: c.displayName, industry: c.industry,
+    ...(canSeeDirectory ? { npwp: c.npwp, address: c.address, contactName: c.contactName, contactPhone: c.contactPhone } : {}),
+    deletedAt: c.deletedAt, createdAt: c.createdAt,
+  }));
+  const publicSites = siteRows.map((s) => ({
+    id: s.id, clientId: s.clientId, name: s.name, address: s.address,
+    ...(canSeeDirectory ? { contact: s.contact, latitude: s.latitude, longitude: s.longitude } : {}),
+  }));
+  const publicProjects = allowedProjects.map((p) => ({
+    ...p,
+    // Nilai kontrak/PPN/retensi hanya untuk peran berhak (RAB klien).
+    contractValue: canClient ? p.contractValue : "",
+    contractPpn: canClient ? p.contractPpn : "",
+    retentionPct: canClient ? p.retentionPct : "",
+    clientName: clientMap.get(p.clientId)?.displayName,
+    clientLegalName: clientMap.get(p.clientId)?.legalName,
+    siteName: p.siteId ? siteMap.get(p.siteId)?.name : null,
+    siteAddress: p.siteId ? siteMap.get(p.siteId)?.address : null,
+    pmName: p.pmId ? userMap.get(p.pmId)?.name : null,
+  }));
+  const publicSettings = {
+    ...settingsRows[0],
+    defaultPpnRate: settingsRows[0]?.defaultPpnRate ?? "11",
+    allowSplitExpense: settingsRows[0]?.allowSplitExpense ?? false,
+    npwp: canSeeDirectory ? settingsRows[0]?.npwp : null,
+  };
+  const companies = await listCompaniesForUser(user.id);
+
   return {
-    generatedAt: new Date().toISOString(), user, users: safeUsers,
-    settings: { ...settingsRows[0], defaultPpnRate: settingsRows[0]?.defaultPpnRate ?? "11", allowSplitExpense: settingsRows[0]?.allowSplitExpense ?? false },
-    clients: clientRows, sites: siteRows,
+    generatedAt: new Date().toISOString(), user, companies, users: visibleDirectory,
+    settings: publicSettings,
+    clients: publicClients, sites: publicSites,
     opportunities: hasPermission(user, "opportunity.view") ? opportunityRows.map((o) => ({ ...o, clientName: clientMap.get(o.clientId)?.displayName, ownerName: userMap.get(o.ownerId)?.name, converted: projectRows.some((p) => p.opportunityId === o.id) })) : [],
-    projects: allowedProjects.map((p) => ({ ...p, clientName: clientMap.get(p.clientId)?.displayName, clientLegalName: clientMap.get(p.clientId)?.legalName, siteName: p.siteId ? siteMap.get(p.siteId)?.name : null, siteAddress: p.siteId ? siteMap.get(p.siteId)?.address : null, pmName: p.pmId ? userMap.get(p.pmId)?.name : null })),
+    projects: publicProjects,
     members: memberRows.filter((m) => allowedIds.includes(m.projectId)).map((m) => ({ ...m, userName: userMap.get(m.userId)?.name, userRole: userMap.get(m.userId)?.role })),
     categories: categoryRows.filter((c) => c.isActive && (canInternal || !c.isOverhead)).map((c) => ({ id: c.id, code: c.code, name: c.name, isOverhead: c.isOverhead })),
     units: unitRows.map((u) => ({ id: u.id, code: u.code, name: u.name })), budgets: visibleBudgets, expenses: visibleExpenses,

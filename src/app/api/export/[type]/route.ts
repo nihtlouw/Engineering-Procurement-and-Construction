@@ -1,8 +1,9 @@
+import { companyRoute } from "@/shared/auth/route";
 import ExcelJS from "exceljs";
 import { errorResponse, requireUser } from "@/lib/auth";
 import { getWorkspaceData } from "@/lib/workspace";
 
-export async function GET(_request: Request, { params }: { params: Promise<{ type: string }> }) {
+async function GETHandler(_request: Request, { params }: { params: Promise<{ type: string }> }) {
   try {
     const user = await requireUser(); const { type } = await params; const data = await getWorkspaceData(user);
     if (!["expenses", "invoices", "budget"].includes(type)) return Response.json({ code: "UNKNOWN_EXPORT", message: "Jenis ekspor tidak dikenal." }, { status: 404 });
@@ -25,3 +26,5 @@ export async function GET(_request: Request, { params }: { params: Promise<{ typ
     return new Response(Buffer.from(buffer), { headers: { "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Content-Disposition": `attachment; filename="ardaya-${type}-${new Date().toISOString().slice(0, 10)}.xlsx"`, "Cache-Control": "private, no-store" } });
   } catch (error) { return errorResponse(error); }
 }
+
+export const GET = companyRoute(GETHandler);

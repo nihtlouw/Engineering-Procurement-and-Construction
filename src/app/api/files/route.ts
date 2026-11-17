@@ -1,3 +1,4 @@
+import { companyRoute } from "@/shared/auth/route";
 import { createHash } from "node:crypto";
 import { and, eq, ne } from "drizzle-orm";
 import { z } from "zod";
@@ -8,7 +9,7 @@ import { newId } from "@/lib/server-services";
 
 const allowed = new Set(["image/jpeg", "image/png", "image/webp", "image/heic", "application/pdf", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/octet-stream"]);
 const schema = z.object({ fileName: z.string().min(1).max(180), mimeType: z.string(), contentBase64: z.string().min(1) });
-export async function POST(request: Request) {
+async function POSTHandler(request: Request) {
   try {
     const user = await requireUser(); const body = schema.parse(await request.json());
     if (!allowed.has(body.mimeType)) return Response.json({ code: "MIME_NOT_ALLOWED", message: "Tipe file tidak diizinkan. Gunakan JPG, PNG, WebP, HEIC, PDF, XLSX, DOCX, atau DWG." }, { status: 415 });
@@ -30,3 +31,5 @@ export async function POST(request: Request) {
 function andReceiptNotVoided(fileId: string) {
   return and(ne(expenses.approvalStatus, "VOIDED"), eq(expenses.receiptFileId, fileId));
 }
+
+export const POST = companyRoute(POSTHandler);

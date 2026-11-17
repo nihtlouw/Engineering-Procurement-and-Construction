@@ -1,3 +1,4 @@
+import { companyRoute } from "@/shared/auth/route";
 import { createHash } from "node:crypto";
 import { and, count, eq, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -10,7 +11,7 @@ import { newId, requireProject } from "@/lib/server-services";
 
 const roman = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
 const schema = z.object({ action: z.enum(["FINALIZE", "REVISE"]) });
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function POSTHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await requireUser(); const { id } = await params; const { action } = schema.parse(await request.json());
     const [doc] = await db.select().from(documents).where(eq(documents.id, id)).limit(1); if (!doc || !doc.projectId) throw new ApiError("NOT_FOUND", "Dokumen tidak ditemukan.", 404);
@@ -43,3 +44,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return Response.json({ data: { id, status: "FINAL", ...result } });
   } catch (error) { return errorResponse(error); }
 }
+
+export const POST = companyRoute(POSTHandler);

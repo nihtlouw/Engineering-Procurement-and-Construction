@@ -10,6 +10,7 @@ import { formatDate, formatIDR } from "@/lib/format";
 type Notify = (message: string) => void;
 export function DocumentComposer({ data, open, onClose, onSaved, projectId }: { data: AppData; open: boolean; onClose: () => void; onSaved: Notify; projectId?: string }) {
   const [project, setProject] = useState(projectId || data.projects[0]?.id || ""); const [template, setTemplate] = useState("BAST1"); const [relatedId, setRelatedId] = useState(""); const [saving, setSaving] = useState(false); const [error, setError] = useState("");
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- utang UI pra-S1; refactor ke derived state/key remount dijadwalkan S2
   useEffect(() => { if (projectId) setProject(projectId); }, [projectId, open]);
   const relatedType = ["INVOICE", "KWITANSI"].includes(template) ? "INVOICE" : template === "CHANGE_ORDER" ? "CHANGE_ORDER" : "PROJECT";
   const save = async () => { setSaving(true); setError(""); try { await api("/api/documents", { method: "POST", body: JSON.stringify({ action: "CREATE", projectId: project, templateCode: template, relatedType, relatedId: relatedId || project }) }); onSaved("Dokumen dibuat sebagai DRAFT dengan snapshot data dan versi template."); onClose(); } catch (e) { setError(e instanceof Error ? e.message : "Dokumen gagal dibuat"); } finally { setSaving(false); } };

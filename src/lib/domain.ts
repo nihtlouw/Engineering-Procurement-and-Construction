@@ -1,4 +1,6 @@
-export const ROLES = ["ADMIN", "ESTIMATOR", "PM", "FIELD", "PROCUREMENT", "FINANCE"] as const;
+// S1: CLIENT_VIEWER ditambahkan. Role OTORITATIF kini ada di memberships.company_role;
+// users.role tetap dipertahankan sebagai fallback legacy untuk data seed.
+export const ROLES = ["ADMIN", "ESTIMATOR", "PM", "FIELD", "PROCUREMENT", "FINANCE", "CLIENT_VIEWER"] as const;
 export type Role = (typeof ROLES)[number];
 
 export const PERMISSIONS = [
@@ -20,6 +22,9 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   FIELD: ["schedule.view", "progress.create", "expense.create", "expense.view.own", "document.view", "document.upload"],
   PROCUREMENT: ["portfolio.view", "budget.client.view", "schedule.view", "progress.create", "expense.create", "expense.view.project", "purchase.view", "purchase.edit", "document.view", "document.upload"],
   FINANCE: ["portfolio.view", "budget.client.view", "budget.internal.view", "budget.approve", "schedule.view", "expense.create", "expense.view.project", "expense.approve", "expense.void", "settlement.manage", "purchase.view", "invoice.view", "invoice.edit", "invoice.approve", "payment.record", "document.view", "document.upload", "gendoc.create", "gendoc.finalize", "project.close", "audit.view"],
+  // Read-only untuk pihak klien. SENGaja tanpa budget.internal.view, expense.*,
+  // invoice.*, audit.view, users.manage, dan seluruh aksi mutasi.
+  CLIENT_VIEWER: ["portfolio.view", "budget.client.view", "schedule.view", "document.view"],
 };
 
 export const STAGES = ["AWAITING_KICKOFF", "PLANNING", "PROCUREMENT_MOBILIZATION", "IN_PROGRESS", "TESTING_COMMISSIONING", "HANDOVER", "WARRANTY_PERIOD", "CLOSING", "COMPLETED"] as const;
@@ -57,7 +62,20 @@ export const LABELS: Record<string, string> = {
   CLARIFICATION: "Klarifikasi", FINAL_DOC: "Final", ACTIVE: "Aktif", IMPLEMENTED: "Diimplementasikan", AWAITING_CLIENT: "Menunggu Klien",
 };
 
-export type SafeUser = { id: string; name: string; email: string; role: Role; title: string; permissions: Permission[] };
+/**
+ * Proyeksi aman untuk daftar pengguna. `companyId` opsional karena daftar user
+ * bisa berisi identitas global yang belum tentu menjadi anggota company aktif.
+ * Email SENGAJA tidak dikirim ke peran biasa (lihat getWorkspaceData).
+ */
+export type SafeUser = {
+  id: string; name: string; email: string; role: Role; title: string; permissions: Permission[];
+  companyId?: string; companyName?: string; companyRole?: Role;
+};
+
+/** Identitas hasil sesi: SELALU terikat tepat satu company aktif. */
+export type SessionUser = SafeUser & {
+  companyId: string; companyName: string; companyRole: Role;
+};
 export type ProjectMetric = {
   actualCost?: string; pendingCost?: string; commitment?: string; remainingCommitment?: string;
   contractValueCurrent?: string; forecastExposure?: string; invoiced?: string; received?: string;
@@ -68,7 +86,8 @@ export type CloseCheck = { key: string; label: string; ok: boolean; detail: stri
 
 export type WorkspaceData = {
   generatedAt: string;
-  user: SafeUser;
+  user: SessionUser;
+  companies: { id: string; name: string; slug: string }[];
   users: SafeUser[];
   settings: { id: string; legalName: string; displayName: string; npwp: string | null; address: string | null; phone: string | null; email: string | null; defaultPpnRate: string; allowSplitExpense: boolean };
   clients: Record<string, unknown>[];

@@ -1,3 +1,4 @@
+import { companyRoute } from "@/shared/auth/route";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
@@ -7,7 +8,7 @@ import { newId, requireProject } from "@/lib/server-services";
 
 const transitions: Record<string, string[]> = { DRAFT: ["REQUESTED", "CANCELLED"], REQUESTED: ["ORDERED", "CANCELLED"], ORDERED: ["PARTIALLY_RECEIVED", "RECEIVED", "CANCELLED"], PARTIALLY_RECEIVED: ["RECEIVED", "CANCELLED"], RECEIVED: ["CLOSED"], CLOSED: [], CANCELLED: [] };
 const schema = z.object({ to: z.string(), poNumber: z.string().optional() });
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function POSTHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await requireUser(); assertPermission(user, "purchase.edit"); const { id } = await params; const body = schema.parse(await request.json());
     const [po] = await db.select().from(purchaseRecords).where(eq(purchaseRecords.id, id)).limit(1); if (!po) throw new ApiError("NOT_FOUND", "PO tidak ditemukan.", 404);
@@ -21,3 +22,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return Response.json({ data: { id, status: body.to } });
   } catch (error) { return errorResponse(error); }
 }
+
+export const POST = companyRoute(POSTHandler);

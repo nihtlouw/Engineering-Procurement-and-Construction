@@ -1,3 +1,4 @@
+import { companyRoute } from "@/shared/auth/route";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
@@ -7,7 +8,7 @@ import { newId, requireProject, requiredReason } from "@/lib/server-services";
 
 const transitions: Record<string, Record<string, string>> = { DRAFT: { SUBMIT: "INTERNAL_REVIEW" }, INTERNAL_REVIEW: { SEND_CLIENT: "AWAITING_CLIENT", RETURN: "DRAFT", APPROVE: "APPROVED", REJECT: "REJECTED" }, AWAITING_CLIENT: { APPROVE: "APPROVED", REJECT: "REJECTED" }, APPROVED: {}, REJECTED: {}, IMPLEMENTED: {} };
 const schema = z.object({ action: z.enum(["SUBMIT", "SEND_CLIENT", "RETURN", "APPROVE", "REJECT"]), reason: z.string().optional() });
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function POSTHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await requireUser(); const { id } = await params; const body = schema.parse(await request.json());
     const [co] = await db.select().from(changeOrders).where(eq(changeOrders.id, id)).limit(1); if (!co) throw new ApiError("NOT_FOUND", "Change order tidak ditemukan.", 404);
@@ -22,3 +23,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return Response.json({ data: { id, status: next } });
   } catch (error) { return errorResponse(error); }
 }
+
+export const POST = companyRoute(POSTHandler);

@@ -1,27 +1,19 @@
 "use client";
 import { useState } from "react";
 import { motion } from "motion/react";
-import { ArrowRight, CheckCircle2, Eye, EyeOff, LockKeyhole, ShieldCheck, Zap } from "lucide-react";
+import { ArrowRight, CheckCircle2, Eye, EyeOff, ShieldCheck, Zap } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button, Input, Field } from "@/components/ui";
 
-/* Halaman masuk — rencana desain v1 bab 09.
-   Panel kiri memakai pola garis SVG (bukan foto) supaya tidak ada aset yang gagal dimuat
-   dan tidak memuat dekorasi berat. Tombol akun demo hanya tampil bila mode demo aktif. */
-
-const accounts = [
-  { role: "PM", email: "pm@ardaya.id", name: "Bagas Prasetyo", detail: "Proyek, biaya & approval" },
-  { role: "FINANCE", email: "finance@ardaya.id", name: "Maya Puspita", detail: "Tagihan, PPh & reimburse" },
-  { role: "FIELD", email: "field@ardaya.id", name: "Rizky Ramadhan", detail: "Pengeluaran & progres site" },
-  { role: "ADMIN", email: "admin@ardaya.id", name: "Aditya Nugraha", detail: "Seluruh kontrol & override" },
-];
+/* Halaman masuk. S1: kredensial demo TIDAK lagi ditampilkan atau diisi otomatis.
+   Panel kiri memakai pola garis SVG (bukan foto) supaya tidak ada aset yang gagal dimuat. */
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
-export default function LoginScreen({ demoPassword }: { demoPassword: string | null }) {
+export default function LoginScreen() {
   const router = useRouter();
-  const [email, setEmail] = useState("pm@ardaya.id");
-  const [password, setPassword] = useState(demoPassword || "");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -99,30 +91,7 @@ export default function LoginScreen({ demoPassword }: { demoPassword: string | n
             <Button type="submit" size="lg" loading={loading} className="w-full">Masuk ke workspace<ArrowRight size={16} /></Button>
           </form>
 
-          {demoPassword ? (
-            <>
-              <div className="my-6 flex items-center gap-2.5">
-                <span className="h-px flex-1 bg-line" />
-                <span className="text-[11px] font-semibold uppercase tracking-[.12em] text-muted">Akun demo</span>
-                <span className="h-px flex-1 bg-line" />
-              </div>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {accounts.map((account) => (
-                  <button key={account.role} disabled={loading} onClick={() => { setEmail(account.email); setPassword(demoPassword); void login(account.email, demoPassword); }} className="rounded-[var(--radius-control)] border border-line-strong bg-surface p-2.5 text-left transition-colors hover:border-ink-500 hover:bg-paper-2 disabled:opacity-50">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[11px] font-semibold uppercase tracking-[.08em] text-muted">{account.role}</span>
-                      <ArrowRight size={12} className="text-subtle" />
-                    </div>
-                    <p className="mt-1 text-[12.5px] font-semibold">{account.name}</p>
-                    <p className="mt-0.5 text-[11px] leading-relaxed text-muted">{account.detail}</p>
-                  </button>
-                ))}
-              </div>
-              <p className="mt-4 flex items-start gap-1.5 text-[11px] leading-relaxed text-muted"><LockKeyhole size={12} className="mt-0.5 shrink-0" />Pemilihan akun tetap diverifikasi server. Mode demo aktif hanya di lingkungan pengembangan.</p>
-            </>
-          ) : (
-            <p className="mt-5 flex items-start gap-1.5 text-[11px] leading-relaxed text-muted"><LockKeyhole size={12} className="mt-0.5 shrink-0" />Kata sandi demo tidak dikonfigurasi pada lingkungan ini. Hubungi admin untuk akses akun.</p>
-          )}
+          <p className="mt-5 text-[11px] leading-relaxed text-muted">Akses diberikan oleh Admin Perusahaan melalui undangan company. Hubungi admin bila akun Anda belum aktif.</p>
         </motion.div>
       </section>
     </main>

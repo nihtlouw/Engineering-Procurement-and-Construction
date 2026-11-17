@@ -1,3 +1,4 @@
+import { companyRoute } from "@/shared/auth/route";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
@@ -8,7 +9,7 @@ import { D, money } from "@/lib/format";
 import { newId, requireProject } from "@/lib/server-services";
 
 const schema = z.object({ paidDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), cashReceivedAmount: z.string(), withholdingTaxAmount: z.string().default("0"), withholdingTaxType: z.string().optional(), method: z.enum(["CASH", "COMPANY_CARD", "BANK_TRANSFER", "PERSONAL", "OTHER"]), reference: z.string().optional() });
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function POSTHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await requireUser(); assertPermission(user, "payment.record"); const { id } = await params; const body = schema.parse(await request.json());
     const [invoice] = await db.select().from(customerInvoices).where(eq(customerInvoices.id, id)).limit(1);
@@ -29,3 +30,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return Response.json({ data: { id: paymentId, invoiceStatus: next, balance: money(balance.minus(cash).minus(tax)) } }, { status: 201 });
   } catch (error) { return errorResponse(error); }
 }
+
+export const POST = companyRoute(POSTHandler);

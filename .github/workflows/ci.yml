@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: TypeScript
+        run: npm run typecheck
+      - name: ESLint
+        run: npm run lint
+      - name: Unit tests
+        run: npm test
+      - name: Dependency audit (production, high+)
+        run: npm audit --omit=dev --audit-level=high
+      # Sengaja TANPA DATABASE_URL: build harus hijau tanpa koneksi DB (audit #4).
+      - name: Production build (no DB env)
+        run: npm run build
+        env:
+          DATABASE_URL: ""
+          FILE_SIGNING_SECRET: ""

@@ -1,3 +1,4 @@
+import { companyRoute } from "@/shared/auth/route";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
@@ -9,7 +10,7 @@ import { D, todayJakarta } from "@/lib/format";
 import { newId, requireProject, requiredReason } from "@/lib/server-services";
 
 const schema = z.object({ action: z.enum(["STAGE", "SET_BASELINE", "IMPLEMENT_CHANGE_ORDER", "TOGGLE_HANDOVER", "TOGGLE_PUNCH", "ADD_PUNCH"]), targetId: z.string().optional(), value: z.string().optional(), description: z.string().optional(), reason: z.string().optional() });
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function POSTHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await requireUser(); const { id: projectId } = await params; const body = schema.parse(await request.json());
     const isCorrection = user.role === "ADMIN" && !!body.reason;
@@ -114,3 +115,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return Response.json({ data: { isClosed: !item.isClosed } });
   } catch (error) { return errorResponse(error); }
 }
+
+export const POST = companyRoute(POSTHandler);

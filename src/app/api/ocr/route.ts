@@ -1,3 +1,4 @@
+import { companyRoute } from "@/shared/auth/route";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { recognize } from "tesseract.js";
@@ -8,7 +9,7 @@ import { parseIndonesianNumber } from "@/lib/format";
 
 export const maxDuration = 60;
 const schema = z.object({ fileId: z.string() });
-export async function POST(request: Request) {
+async function POSTHandler(request: Request) {
   try {
     const user = await requireUser(); const { fileId } = schema.parse(await request.json());
     const [file] = await db.select().from(fileObjects).where(eq(fileObjects.id, fileId)).limit(1);
@@ -48,3 +49,5 @@ export async function POST(request: Request) {
     }
   } catch (error) { return errorResponse(error); }
 }
+
+export const POST = companyRoute(POSTHandler);

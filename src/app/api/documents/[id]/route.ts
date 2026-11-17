@@ -1,3 +1,4 @@
+import { companyRoute } from "@/shared/auth/route";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
@@ -6,7 +7,7 @@ import { ApiError, assertPermission, errorResponse, requireUser } from "@/lib/au
 import { newId, requireProject } from "@/lib/server-services";
 
 const schema = z.object({ title: z.string().min(3).optional(), blocks: z.array(z.record(z.string(), z.unknown())).min(1) });
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function PATCHHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await requireUser(); assertPermission(user, "gendoc.create"); const { id } = await params; const body = schema.parse(await request.json());
     const [doc] = await db.select().from(documents).where(eq(documents.id, id)).limit(1); if (!doc || !doc.projectId) throw new ApiError("NOT_FOUND", "Dokumen tidak ditemukan.", 404);
@@ -19,3 +20,5 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return Response.json({ data: { id } });
   } catch (error) { return errorResponse(error); }
 }
+
+export const PATCH = companyRoute(PATCHHandler);

@@ -1,3 +1,4 @@
+import { companyRoute } from "@/shared/auth/route";
 import { count, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
@@ -6,7 +7,7 @@ import { assertPermission, errorResponse, requireUser } from "@/lib/auth";
 import { newId, requireProject } from "@/lib/server-services";
 
 const schema = z.object({ projectId: z.string(), title: z.string().min(5), reason: z.string().min(5), scopeDescription: z.string().min(5), priceImpact: z.string().default("0"), costImpact: z.string().default("0"), timeImpactDays: z.number().int().min(0).default(0) });
-export async function POST(request: Request) {
+async function POSTHandler(request: Request) {
   try {
     const user = await requireUser(); assertPermission(user, "changeorder.edit"); const body = schema.parse(await request.json()); await requireProject(user, body.projectId, "changeorder.edit");
     const id = newId();
@@ -20,3 +21,5 @@ export async function POST(request: Request) {
     return Response.json({ data: { id, code } }, { status: 201 });
   } catch (error) { return errorResponse(error); }
 }
+
+export const POST = companyRoute(POSTHandler);

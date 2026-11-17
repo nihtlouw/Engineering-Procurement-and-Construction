@@ -1,3 +1,4 @@
+import { companyRoute } from "@/shared/auth/route";
 import { timingSafeEqual } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -5,7 +6,7 @@ import { documents, expenseLines, expenses, fileObjects } from "@/db/schema";
 import { ApiError, errorResponse, requireUser, signFileToken } from "@/lib/auth";
 import { requireProject } from "@/lib/server-services";
 
-export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function GETHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await requireUser(); const { id } = await params; const url = new URL(request.url);
     const expires = Number(url.searchParams.get("expires")); const signature = url.searchParams.get("signature") || "";
@@ -25,3 +26,5 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     return new Response(Buffer.from(file.contentBase64, "base64"), { headers: { "Content-Type": file.mimeType, "Content-Length": String(file.sizeBytes), "Content-Disposition": `inline; filename="${file.fileName.replace(/"/g, "")}"`, "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } });
   } catch (error) { return errorResponse(error); }
 }
+
+export const GET = companyRoute(GETHandler);

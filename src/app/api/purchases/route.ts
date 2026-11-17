@@ -1,3 +1,4 @@
+import { companyRoute } from "@/shared/auth/route";
 import { z } from "zod";
 import { db } from "@/db";
 import { activityLogs, purchaseRecords } from "@/db/schema";
@@ -6,7 +7,7 @@ import { D, money } from "@/lib/format";
 import { newId, requireProject } from "@/lib/server-services";
 
 const schema = z.object({ projectId: z.string(), supplierName: z.string().min(2), poNumber: z.string().optional(), summary: z.string().min(5), dppAmount: z.string(), ppnAmount: z.string().default("0"), orderDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), expectedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(), budgetLineId: z.string().nullable().optional(), status: z.enum(["DRAFT", "REQUESTED", "ORDERED"]).default("DRAFT") });
-export async function POST(request: Request) {
+async function POSTHandler(request: Request) {
   try {
     const user = await requireUser(); assertPermission(user, "purchase.edit"); const body = schema.parse(await request.json()); await requireProject(user, body.projectId, "purchase.edit");
     if (D(body.dppAmount).lte(0) || D(body.ppnAmount).lt(0)) throw new ApiError("INVALID_AMOUNT", "Nilai DPP PO harus positif.", 422);
@@ -19,3 +20,5 @@ export async function POST(request: Request) {
     return Response.json({ data: { id } }, { status: 201 });
   } catch (error) { return errorResponse(error); }
 }
+
+export const POST = companyRoute(POSTHandler);

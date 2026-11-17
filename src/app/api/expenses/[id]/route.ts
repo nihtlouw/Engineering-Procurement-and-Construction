@@ -1,3 +1,4 @@
+import { companyRoute } from "@/shared/auth/route";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
@@ -6,7 +7,7 @@ import { ApiError, assertPermission, errorResponse, requireUser } from "@/lib/au
 import { newId, requireProject } from "@/lib/server-services";
 
 const schema = z.object({ merchantName: z.string().min(2).optional(), receiptNumber: z.string().optional(), note: z.string().optional(), mismatchReason: z.string().optional(), receiptFileId: z.string().nullable().optional() });
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function PATCHHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await requireUser(); assertPermission(user, "expense.create"); const { id } = await params; const body = schema.parse(await request.json());
     const [expense] = await db.select().from(expenses).where(eq(expenses.id, id)).limit(1); if (!expense) throw new ApiError("NOT_FOUND", "Pengeluaran tidak ditemukan.", 404);
@@ -22,3 +23,5 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return Response.json({ data: { id, corrected: true } });
   } catch (error) { return errorResponse(error); }
 }
+
+export const PATCH = companyRoute(PATCHHandler);

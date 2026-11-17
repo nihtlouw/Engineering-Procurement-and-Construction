@@ -1,4 +1,4 @@
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   boolean,
   date,
@@ -9,6 +9,8 @@ import {
   text,
   timestamp,
   uniqueIndex,
+  index,
+  uuid,
 } from "drizzle-orm/pg-core";
 
 const id = () => text("id").primaryKey();
@@ -30,6 +32,8 @@ export const users = pgTable("users", {
 
 export const sessions = pgTable("sessions", {
   id: id(),
+  companyId: uuid("company_id").notNull(),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
   userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   createdAt: createdAt(),
@@ -37,6 +41,7 @@ export const sessions = pgTable("sessions", {
 
 export const companySettings = pgTable("company_settings", {
   id: id(),
+  companyId: uuid("company_id").notNull().default(sql`app_current_company_id()`),
   legalName: text("legal_name").notNull(),
   displayName: text("display_name").notNull(),
   npwp: text("npwp"),
@@ -52,6 +57,7 @@ export const companySettings = pgTable("company_settings", {
 
 export const clients = pgTable("clients", {
   id: id(),
+  companyId: uuid("company_id").notNull().default(sql`app_current_company_id()`),
   code: text("code").notNull().unique(),
   legalName: text("legal_name").notNull(),
   displayName: text("display_name").notNull(),
@@ -66,6 +72,7 @@ export const clients = pgTable("clients", {
 
 export const sites = pgTable("sites", {
   id: id(),
+  companyId: uuid("company_id").notNull().default(sql`app_current_company_id()`),
   clientId: text("client_id").notNull().references(() => clients.id),
   name: text("name").notNull(),
   address: text("address"),
@@ -76,6 +83,7 @@ export const sites = pgTable("sites", {
 
 export const opportunities = pgTable("opportunities", {
   id: id(),
+  companyId: uuid("company_id").notNull().default(sql`app_current_company_id()`),
   code: text("code").notNull().unique(),
   title: text("title").notNull(),
   clientId: text("client_id").notNull().references(() => clients.id),
@@ -91,6 +99,7 @@ export const opportunities = pgTable("opportunities", {
 
 export const projects = pgTable("projects", {
   id: id(),
+  companyId: uuid("company_id").notNull().default(sql`app_current_company_id()`),
   code: text("code").notNull().unique(),
   title: text("title").notNull(),
   clientId: text("client_id").notNull().references(() => clients.id),
@@ -118,6 +127,7 @@ export const projectMembers = pgTable(
   "project_members",
   {
     id: id(),
+  companyId: uuid("company_id").notNull().default(sql`app_current_company_id()`),
     projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
     userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     projectRole: text("project_role").notNull(),
@@ -129,6 +139,7 @@ export const projectMembers = pgTable(
 
 export const costCategories = pgTable("cost_categories", {
   id: id(),
+  companyId: uuid("company_id"),
   code: text("code").notNull().unique(),
   name: text("name").notNull(),
   isOverhead: boolean("is_overhead").notNull().default(false),
@@ -137,6 +148,7 @@ export const costCategories = pgTable("cost_categories", {
 
 export const units = pgTable("units", {
   id: id(),
+  companyId: uuid("company_id"),
   code: text("code").notNull().unique(),
   name: text("name").notNull(),
 });
@@ -145,6 +157,7 @@ export const budgetVersions = pgTable(
   "budget_versions",
   {
     id: id(),
+  companyId: uuid("company_id").notNull().default(sql`app_current_company_id()`),
     projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
     type: text("type").notNull(),
     versionNo: integer("version_no").notNull(),
@@ -162,6 +175,7 @@ export const budgetVersions = pgTable(
 
 export const budgetLines = pgTable("budget_lines", {
   id: id(),
+  companyId: uuid("company_id").notNull().default(sql`app_current_company_id()`),
   budgetVersionId: text("budget_version_id").notNull().references(() => budgetVersions.id, { onDelete: "cascade" }),
   costCategoryId: text("cost_category_id").notNull().references(() => costCategories.id),
   code: text("code"),
@@ -176,6 +190,7 @@ export const budgetLines = pgTable("budget_lines", {
 
 export const contractTerms = pgTable("contract_terms", {
   id: id(),
+  companyId: uuid("company_id").notNull().default(sql`app_current_company_id()`),
   projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
   type: text("type").notNull(),
   name: text("name").notNull(),
@@ -188,6 +203,7 @@ export const contractTerms = pgTable("contract_terms", {
 
 export const purchaseRecords = pgTable("purchase_records", {
   id: id(),
+  companyId: uuid("company_id").notNull().default(sql`app_current_company_id()`),
   projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
   supplierName: text("supplier_name").notNull(),
   poNumber: text("po_number"),
@@ -205,6 +221,7 @@ export const purchaseRecords = pgTable("purchase_records", {
 
 export const fileObjects = pgTable("file_objects", {
   id: id(),
+  companyId: uuid("company_id").notNull().default(sql`app_current_company_id()`),
   storageKey: text("storage_key").notNull().unique(),
   fileName: text("file_name").notNull(),
   mimeType: text("mime_type").notNull(),
@@ -217,6 +234,7 @@ export const fileObjects = pgTable("file_objects", {
 
 export const expenses = pgTable("expenses", {
   id: id(),
+  companyId: uuid("company_id").notNull().default(sql`app_current_company_id()`),
   code: text("code").notNull().unique(),
   type: text("type").notNull().default("FIELD_EXPENSE"),
   defaultScope: text("default_scope").notNull().default("PROJECT"),
@@ -259,6 +277,7 @@ export const expenses = pgTable("expenses", {
 
 export const expenseLines = pgTable("expense_lines", {
   id: id(),
+  companyId: uuid("company_id").notNull().default(sql`app_current_company_id()`),
   expenseId: text("expense_id").notNull().references(() => expenses.id, { onDelete: "cascade" }),
   scope: text("scope").notNull().default("PROJECT"),
   projectId: text("project_id").references(() => projects.id),
@@ -277,6 +296,7 @@ export const expenseLines = pgTable("expense_lines", {
 
 export const expenseSettlements = pgTable("expense_settlements", {
   id: id(),
+  companyId: uuid("company_id").notNull().default(sql`app_current_company_id()`),
   expenseId: text("expense_id").notNull().references(() => expenses.id, { onDelete: "cascade" }),
   payeeUserId: text("payee_user_id").notNull().references(() => users.id),
   amount: money("amount"),
@@ -289,6 +309,7 @@ export const expenseSettlements = pgTable("expense_settlements", {
 
 export const customerInvoices = pgTable("customer_invoices", {
   id: id(),
+  companyId: uuid("company_id").notNull().default(sql`app_current_company_id()`),
   projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
   contractTermId: text("contract_term_id").references(() => contractTerms.id),
   number: text("number").notNull().unique(),
@@ -306,6 +327,7 @@ export const customerInvoices = pgTable("customer_invoices", {
 
 export const customerPayments = pgTable("customer_payments", {
   id: id(),
+  companyId: uuid("company_id").notNull().default(sql`app_current_company_id()`),
   invoiceId: text("invoice_id").notNull().references(() => customerInvoices.id, { onDelete: "cascade" }),
   paidDate: date("paid_date").notNull(),
   cashReceivedAmount: money("cash_received_amount"),
@@ -319,6 +341,7 @@ export const customerPayments = pgTable("customer_payments", {
 
 export const scheduleItems = pgTable("schedule_items", {
   id: id(),
+  companyId: uuid("company_id").notNull().default(sql`app_current_company_id()`),
   projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
   parentId: text("parent_id"),
   type: text("type").notNull(),
@@ -336,6 +359,7 @@ export const scheduleItems = pgTable("schedule_items", {
 
 export const progressUpdates = pgTable("progress_updates", {
   id: id(),
+  companyId: uuid("company_id").notNull().default(sql`app_current_company_id()`),
   scheduleItemId: text("schedule_item_id").notNull().references(() => scheduleItems.id, { onDelete: "cascade" }),
   projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
   reportDate: date("report_date").notNull(),
@@ -351,6 +375,7 @@ export const progressUpdates = pgTable("progress_updates", {
 
 export const changeOrders = pgTable("change_orders", {
   id: id(),
+  companyId: uuid("company_id").notNull().default(sql`app_current_company_id()`),
   projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
   code: text("code").notNull().unique(),
   title: text("title").notNull(),
@@ -366,6 +391,7 @@ export const changeOrders = pgTable("change_orders", {
 
 export const punchItems = pgTable("punch_items", {
   id: id(),
+  companyId: uuid("company_id").notNull().default(sql`app_current_company_id()`),
   projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
   description: text("description").notNull(),
   isClosed: boolean("is_closed").notNull().default(false),
@@ -374,6 +400,7 @@ export const punchItems = pgTable("punch_items", {
 
 export const handoverItems = pgTable("handover_items", {
   id: id(),
+  companyId: uuid("company_id").notNull().default(sql`app_current_company_id()`),
   projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   isRequired: boolean("is_required").notNull().default(true),
@@ -383,6 +410,7 @@ export const handoverItems = pgTable("handover_items", {
 
 export const documents = pgTable("documents", {
   id: id(),
+  companyId: uuid("company_id").notNull().default(sql`app_current_company_id()`),
   projectId: text("project_id").references(() => projects.id, { onDelete: "cascade" }),
   relatedType: text("related_type"),
   relatedId: text("related_id"),
@@ -404,6 +432,9 @@ export const documents = pgTable("documents", {
 
 export const activityLogs = pgTable("activity_logs", {
   id: id(),
+  companyId: uuid("company_id").notNull().default(sql`app_current_company_id()`),
+  requestId: text("request_id"),
+  ipAddress: text("ip_address"),
   actorId: text("actor_id").references(() => users.id),
   objectType: text("object_type").notNull(),
   objectId: text("object_id").notNull(),
@@ -416,6 +447,7 @@ export const activityLogs = pgTable("activity_logs", {
 
 export const notifications = pgTable("notifications", {
   id: id(),
+  companyId: uuid("company_id").notNull().default(sql`app_current_company_id()`),
   userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   type: text("type").notNull(),
   title: text("title").notNull(),
@@ -424,6 +456,78 @@ export const notifications = pgTable("notifications", {
   readAt: timestamp("read_at", { withTimezone: true }),
   createdAt: createdAt(),
 });
+
+
+/* ---------------------------------------------------------------------------
+ * S1 · Control-plane tenant. Tabel-tabel ini SENGAJA tidak di-RLS:
+ * identitas global (users) + keanggotaan (memberships) dipakai untuk menentukan
+ * scope SEBELUM RLS bisa diterapkan. Aksesnya dijaga requireUser() + filter
+ * company_id eksplisit pada src/modules/companies/service.ts.
+ * ------------------------------------------------------------------------- */
+export const companies = pgTable("companies", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  slug: text("slug").notNull().unique(),
+  name: text("name").notNull(),
+  legalName: text("legal_name").notNull(),
+  npwp: text("npwp"),
+  address: text("address"),
+  phone: text("phone"),
+  email: text("email"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: createdAt(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+});
+
+export const memberships = pgTable(
+  "memberships",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    companyRole: text("company_role").notNull(),
+    status: text("status").notNull().default("ACTIVE"),
+    invitedBy: text("invited_by").references(() => users.id),
+    joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("membership_company_user_unique").on(table.companyId, table.userId),
+    index("memberships_user_idx").on(table.userId, table.status),
+  ],
+);
+
+export const invitations = pgTable(
+  "invitations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    companyRole: text("company_role").notNull(),
+    tokenHash: text("token_hash").notNull().unique(),
+    invitedBy: text("invited_by").notNull().references(() => users.id),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (table) => [index("invitations_company_email_idx").on(table.companyId, table.email)],
+);
+
+export const authEvents = pgTable(
+  "auth_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    companyId: uuid("company_id").references(() => companies.id),
+    userId: text("user_id").references(() => users.id),
+    email: text("email").notNull(),
+    action: text("action").notNull(),
+    ipAddress: text("ip_address"),
+    createdAt: createdAt(),
+  },
+  (table) => [index("auth_events_email_time_idx").on(table.email, table.createdAt)],
+);
 
 export const projectRelations = relations(projects, ({ many }) => ({
   members: many(projectMembers),
