@@ -6,6 +6,7 @@ import { activityLogs, budgetVersions, companySettings, expenseLines, expenses, 
 import { assertPermission, errorResponse, requireUser } from "@/lib/auth";
 import { D, money } from "@/lib/format";
 import { newId, requireProject } from "@/lib/server-services";
+import { enforcePagu } from "@/modules/budgeting/service";
 
 const lineSchema = z.object({
   scope: z.enum(["PROJECT", "OVERHEAD"]).default("PROJECT"), projectId: z.string().nullable().optional(),
@@ -20,7 +21,7 @@ const schema = z.object({
   transactionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), originalCurrency: z.string().length(3).default("IDR"),
   exchangeRate: z.string().default("1"), originalAmount: z.string().optional(), discountAmount: z.string().default("0"),
   ppnAmount: z.string().default("0"), totalAmount: z.string(), mismatchReason: z.string().optional(),
-  overBillReason: z.string().optional(), paymentMethod: z.enum(["CASH", "COMPANY_CARD", "BANK_TRANSFER", "PERSONAL", "OTHER"]),
+  overBillReason: z.string().optional(), overBudgetReason: z.string().optional(), paymentMethod: z.enum(["CASH", "COMPANY_CARD", "BANK_TRANSFER", "PERSONAL", "OTHER"]),
   paidByType: z.enum(["COMPANY", "EMPLOYEE"]), paidByUserId: z.string().nullable().optional(), note: z.string().optional(),
   receiptFileId: z.string().nullable().optional(), lines: z.array(lineSchema).min(1),
 });
@@ -60,11 +61,22 @@ async function POSTHandler(request: Request) {
     if (expectedTotal.minus(receiptTotal).abs().gt(1) && (!body.mismatchReason || body.mismatchReason.trim().length < 5)) {
       return Response.json({ code: "MISMATCH_REASON_REQUIRED", message: `Selisih ${money(expectedTotal.minus(receiptTotal).abs())} memerlukan alasan pada kolom ketidaksesuaian.`, details: { expectedTotal: money(expectedTotal), receiptTotal: money(receiptTotal) } }, { status: 422 });
     }
+    // S2a · pagu per pos: validasi scope + ambang 90%/100% sebelum insert.
+    const paguWarnings: string[] = [];
+    for (let index = 0; index < rawLines.length; index += 1) {
+      const line = rawLines[index];
+      if (!line.budgetLineId) continue;
+      const result = await enforcePagu(user, {
+        projectId: line.projectId ?? null, budgetLineId: line.budgetLineId,
+        amount: finalTotals[index], reason: body.overBudgetReason,
+      });
+      if (result.warning) paguWarnings.push(result.warning);
+    }
     const projectIds = [...new Set(rawLines.filter((l) => l.scope === "PROJECT" && l.projectId).map((l) => l.projectId!))];
     const baselines = await db.select().from(budgetVersions).where(and(eq(budgetVersions.type, "INTERNAL"), eq(budgetVersions.isActiveBaseline, true)));
     const isPreBaseline = projectIds.some((id) => !baselines.some((b) => b.projectId === id));
     const duplicates = await db.select().from(expenses).where(and(eq(expenses.merchantName, body.merchantName), eq(expenses.receiptNumber, body.receiptNumber || ""), eq(expenses.transactionDate, body.transactionDate), ne(expenses.approvalStatus, "VOIDED")));
-    const warnings = duplicates.length ? [`Peringatan: merchant, nomor nota, dan tanggal sama dengan ${duplicates.map((d) => d.code).join(", ")}.`] : [];
+    const warnings = [...paguWarnings, ...(duplicates.length ? [`Peringatan: merchant, nomor nota, dan tanggal sama dengan ${duplicates.map((d) => d.code).join(", ")}.`] : [])];
     if (body.type === "FIELD_EXPENSE" && projectIds.length) {
       const openPurchases = await db.select().from(purchaseRecords);
       const matching = openPurchases.filter((po) => projectIds.includes(po.projectId) && ["REQUESTED", "ORDERED", "PARTIALLY_RECEIVED", "RECEIVED"].includes(po.status) && po.supplierName.trim().toLowerCase() === body.merchantName.trim().toLowerCase());

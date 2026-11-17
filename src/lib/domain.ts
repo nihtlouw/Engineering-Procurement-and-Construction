@@ -9,7 +9,7 @@ export const PERMISSIONS = [
   "design.view", "design.edit", "schedule.view", "schedule.edit", "progress.create", "expense.create",
   "expense.view.own", "expense.view.project", "expense.approve", "expense.void", "settlement.manage",
   "purchase.view", "purchase.edit", "invoice.view", "invoice.edit", "invoice.approve", "payment.record",
-  "changeorder.edit", "changeorder.approve", "document.view", "document.upload", "template.manage",
+  "changeorder.edit", "changeorder.approve", "variation.edit", "variation.approve", "document.view", "document.upload", "template.manage",
   "gendoc.create", "gendoc.finalize", "project.close", "users.manage", "settings.manage", "audit.view",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
@@ -17,11 +17,11 @@ export type Permission = (typeof PERMISSIONS)[number];
 const all = [...PERMISSIONS];
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   ADMIN: all,
-  ESTIMATOR: ["portfolio.view", "opportunity.view", "opportunity.edit", "proposal.view", "proposal.edit", "budget.client.view", "survey.view", "survey.edit", "design.view", "schedule.view", "expense.create", "expense.view.own", "document.view", "document.upload", "gendoc.create"],
-  PM: ["portfolio.view", "opportunity.view", "opportunity.edit", "proposal.view", "proposal.approve", "budget.client.view", "budget.internal.view", "budget.edit", "budget.approve", "survey.view", "survey.edit", "design.view", "design.edit", "schedule.view", "schedule.edit", "progress.create", "expense.create", "expense.view.project", "expense.approve", "purchase.view", "purchase.edit", "invoice.view", "changeorder.edit", "changeorder.approve", "document.view", "document.upload", "gendoc.create", "gendoc.finalize", "project.close", "audit.view"],
+  ESTIMATOR: ["portfolio.view", "opportunity.view", "opportunity.edit", "proposal.view", "proposal.edit", "budget.client.view", "budget.edit", "variation.edit", "survey.view", "survey.edit", "design.view", "schedule.view", "expense.create", "expense.view.own", "document.view", "document.upload", "gendoc.create"],
+  PM: ["portfolio.view", "opportunity.view", "opportunity.edit", "proposal.view", "proposal.approve", "budget.client.view", "budget.internal.view", "budget.edit", "budget.approve", "survey.view", "survey.edit", "design.view", "design.edit", "schedule.view", "schedule.edit", "progress.create", "expense.create", "expense.view.project", "expense.approve", "purchase.view", "purchase.edit", "invoice.view", "changeorder.edit", "changeorder.approve", "variation.edit", "variation.approve", "document.view", "document.upload", "gendoc.create", "gendoc.finalize", "project.close", "audit.view"],
   FIELD: ["schedule.view", "progress.create", "expense.create", "expense.view.own", "document.view", "document.upload"],
   PROCUREMENT: ["portfolio.view", "budget.client.view", "schedule.view", "progress.create", "expense.create", "expense.view.project", "purchase.view", "purchase.edit", "document.view", "document.upload"],
-  FINANCE: ["portfolio.view", "budget.client.view", "budget.internal.view", "budget.approve", "schedule.view", "expense.create", "expense.view.project", "expense.approve", "expense.void", "settlement.manage", "purchase.view", "invoice.view", "invoice.edit", "invoice.approve", "payment.record", "document.view", "document.upload", "gendoc.create", "gendoc.finalize", "project.close", "audit.view"],
+  FINANCE: ["portfolio.view", "budget.client.view", "budget.internal.view", "budget.approve", "variation.approve", "schedule.view", "expense.create", "expense.view.project", "expense.approve", "expense.void", "settlement.manage", "purchase.view", "invoice.view", "invoice.edit", "invoice.approve", "payment.record", "document.view", "document.upload", "gendoc.create", "gendoc.finalize", "project.close", "audit.view"],
   // Read-only untuk pihak klien. SENGaja tanpa budget.internal.view, expense.*,
   // invoice.*, audit.view, users.manage, dan seluruh aksi mutasi.
   CLIENT_VIEWER: ["portfolio.view", "budget.client.view", "schedule.view", "document.view"],
@@ -60,6 +60,7 @@ export const LABELS: Record<string, string> = {
   DP: "Uang Muka", MOS: "Material On Site", FAT: "FAT", PROGRESS: "Progres", FINAL: "Final", RETENTION: "Retensi", OTHER: "Lainnya",
   AWARDED: "Dimenangkan", LOST: "Kalah", QUALIFIED: "Terkualifikasi", ESTIMATING: "Estimasi", INTERNAL_REVIEW: "Review Internal",
   CLARIFICATION: "Klarifikasi", FINAL_DOC: "Final", ACTIVE: "Aktif", IMPLEMENTED: "Diimplementasikan", AWAITING_CLIENT: "Menunggu Klien",
+  ADD: "Pekerjaan Tambah", OMIT: "Pekerjaan Kurang", SUBSTITUTE: "Substitusi", ADJUST: "Disesuaikan",
 };
 
 /**
@@ -105,6 +106,7 @@ export type WorkspaceData = {
   schedule: Record<string, unknown>[];
   progressUpdates: Record<string, unknown>[];
   changeOrders: Record<string, unknown>[];
+  variationOrders: Record<string, unknown>[];
   punchItems: Record<string, unknown>[];
   handoverItems: Record<string, unknown>[];
   documents: Record<string, unknown>[];

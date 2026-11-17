@@ -15,7 +15,7 @@ import * as schema from "../src/db/schema";
 
 config({ path: ".env.local", quiet: true });
 
-const { clients, companies, costCategories, memberships, projects, sites, users } = schema;
+const { clients, companies, costCategories, memberships, projectMembers, projects, sites, units, users } = schema;
 
 async function main() {
   if (process.env.NODE_ENV === "production" && process.env.ALLOW_DEMO_SEED !== "yes") {
@@ -61,6 +61,10 @@ async function main() {
       companyId, userId: id, companyRole: role, status: "ACTIVE",
     }))).onConflictDoNothing();
 
+    await db.insert(units).values([
+      { id: "unit-ls", code: "Ls", name: "Lump sum" }, { id: "unit-set", code: "set", name: "Set" },
+      { id: "unit-m", code: "m", name: "Meter" }, { id: "unit-unit", code: "Unit", name: "Unit" },
+    ]).onConflictDoNothing();
     await db.insert(costCategories).values([
       { id: "cat-civ", code: "CIV", name: "Sipil & Mekanikal Pendukung" },
       { id: "cat-lab", code: "LAB", name: "Tenaga Kerja & Subkon" },
@@ -76,8 +80,17 @@ async function main() {
       { id: "s-genset", clientId: "c-ndc", name: "Site Genset NDC", address: "Kawasan Industri, Bekasi" },
     ]).onConflictDoNothing();
     await db.insert(projects).values([
-      { id: "p-lvmdp", code: "PRJ-2025-009", title: "Modernisasi LVMDP & ATS", clientId: "c-arunika", siteId: "s-cikarang", pmId: "u-pm", stage: "COMPLETED", contractValue: "4850000000", startDate: "2025-10-01", targetEndDate: "2026-03-06", isLocked: true },
-      { id: "p-genset", code: "PRJ-2026-014", title: "Instalasi Genset & Sinkronisasi", clientId: "c-ndc", siteId: "s-genset", pmId: "u-pm", stage: "IN_PROGRESS", contractValue: "4200000000", startDate: "2026-05-20", targetEndDate: "2026-12-18" },
+      { id: "p-lvmdp", code: "PRJ-2025-009", title: "Modernisasi LVMDP & ATS", clientId: "c-arunika", siteId: "s-cikarang", pmId: "u-pm", stage: "COMPLETED", contractValue: "4850000000", contractValueCurrent: "4850000000", startDate: "2025-10-01", targetEndDate: "2026-03-06", isLocked: true },
+      { id: "p-genset", code: "PRJ-2026-014", title: "Instalasi Genset & Sinkronisasi", clientId: "c-ndc", siteId: "s-genset", pmId: "u-pm", stage: "IN_PROGRESS", contractValue: "4200000000", contractValueCurrent: "4200000000", startDate: "2026-05-20", targetEndDate: "2026-12-18" },
+    ]).onConflictDoNothing();
+    // S1 mewajibkan keanggotaan proyek untuk peran non-ADMIN. Tanpa ini PM /
+    // Estimator / Finance tidak melihat proyek mana pun (termasuk modul S2a).
+    await db.insert(projectMembers).values([
+      { id: "pm-p-lvmdp", projectId: "p-lvmdp", userId: "u-pm", projectRole: "PM" },
+      { id: "pm-p-genset", projectId: "p-genset", userId: "u-pm", projectRole: "PM" },
+      { id: "pm-est-p-genset", projectId: "p-genset", userId: "u-estimator", projectRole: "ESTIMATOR" },
+      { id: "pm-fin-p-genset", projectId: "p-genset", userId: "u-finance", projectRole: "FINANCE" },
+      { id: "pm-proc-p-genset", projectId: "p-genset", userId: "u-procurement", projectRole: "PROCUREMENT" },
     ]).onConflictDoNothing();
 
     console.log(`Seed demo selesai. companyId=${companyId}`);

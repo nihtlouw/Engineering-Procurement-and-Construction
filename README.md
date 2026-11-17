@@ -38,6 +38,17 @@ Seed **tidak pernah** dijalankan dari HTTP request dan diblokir di production ke
 
 Verifikasi: `npm test` menjalankan uji SQL migrasi + isolasi RLS memakai Postgres in-process (PGlite, tanpa server eksternal). Untuk database nyata: `npm run db:migrate -- --check`, `npm run db:migrate`, lalu `npm run db:verify` (atau `EPC_RLS_TEST=1 npm test`).
 
+## S2a — RAB, baseline, pagu & PTK
+
+- Editor versi RAB (`CLIENT` / `INTERNAL`) dengan workflow `DRAFT → REVIEW → APPROVED → BASELINE`; baseline **terkunci & tunggal** (partial unique index).
+- **Pagu per pos**: `pagu = total × (1 + kontingensi)`, warning >90%, blokir >100% kecuali alasan + izin `budget.approve`. Berlaku di `/api/expenses` dan `/api/purchases`; `budgetLineId` lintas proyek ditolak trigger DB.
+- **PTK / Variation Order** `ADD` / `OMIT` / `SUBSTITUTE` dengan dampak harga, biaya, dan waktu **bertanda**; bisa dibatalkan sampai `APPROVED`; `IMPLEMENT` membuat revisi baseline, memperbarui jadwal, merekalkulasi termin, dan menulis audit diff per pos.
+- **Satu sumber nilai kontrak**: `projects.contract_value_current` dijaga trigger DB; `finance.ts` tidak lagi menjumlah `change_orders`. CO lama tetap berfungsi lewat adapter yang sama.
+- RAB internal hanya `ADMIN` / `PM` / `FINANCE`, ditegakkan policy RLS **`AS RESTRICTIVE`** + GUC `app.current_permissions`.
+- Tab baru **RAB & PTK** di workspace proyek; panel lama tidak diubah.
+
+Rincian desain, matriks peran, API, dan acceptance criteria: [`docs/modules/BUDGETING-PTK.md`](docs/modules/BUDGETING-PTK.md).
+
 ## Perintah
 
 | Perintah | Kegunaan |
@@ -45,7 +56,7 @@ Verifikasi: `npm test` menjalankan uji SQL migrasi + isolasi RLS memakai Postgre
 | `npm run dev` / `build` / `start` | Next.js |
 | `npm run typecheck` | TypeScript strict |
 | `npm run lint` | ESLint |
-| `npm test` | Vitest (unit; integrasi RLS opsional) |
+| `npm test` | Vitest (unit + eksekusi seluruh migrasi SQL di PGlite; integrasi RLS opsional) |
 | `npm run db:migrate` | Terapkan migrasi berversi |
 | `npm run db:migrate -- --check` | Daftar migrasi tertunda |
 | `npm run db:verify` | Uji isolasi RLS + audit append-only |
@@ -71,6 +82,7 @@ Checklist deploy lengkap: [`docs/runbook/DEPLOY.md`](docs/runbook/DEPLOY.md).
 ```
 src/
 ├── app/(app)/            # workspace (SSR) + loading/error boundaries
+├── modules/budgeting/    # S2a: types, validation, pagu, service, UI
 ├── app/api/              # route handler, dibungkus companyRoute()/publicRoute()
 ├── app/accept-invite/    # halaman penerimaan undangan
 ├── modules/companies/    # modul pertama: types, validation, service, ui

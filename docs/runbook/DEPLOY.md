@@ -4,10 +4,11 @@
 
 1. **Backup** database produksi (snapshot + uji restore). Migrasi S1 menambah kolom `NOT NULL` + backfill; tidak ada down script.
 2. Set environment di Vercel: `DATABASE_URL`, `FILE_SIGNING_SECRET` (≥ 32 char acak). Pastikan `SEED_DEMO_PASSWORD` **tidak** diset di production.
-3. Jalankan migrasi dari mesin yang punya akses DB (bukan dari Vercel runtime):
+3. Jalankan migrasi dari mesin yang punya akses DB (bukan dari Vercel runtime). Runner otomatis menerapkan `0000 → 0001 → 0002`:
    ```bash
    npm ci
    cp .env.example .env.local   # isi DATABASE_URL produksi
+   npm run db:migrate -- --check
    npm run db:migrate
    npm run db:verify
    ```
@@ -30,6 +31,27 @@
 | 9 | Audit append-only | `npm run db:verify` (pemeriksaan ke-4) |
 | 10 | Dependency aman | `npm audit --omit=dev --audit-level=high` → 0 critical/high |
 
+## Deploy S2a (RAB + baseline + pagu + PTK)
+
+`0002_s2a_budgeting_ptk.sql` bersifat **increment** atas DB yang sudah memakai 0000/0001. Backup tetap wajib: migrasi menambah kolom `NOT NULL`, generated column, dan trigger, serta **tidak punya down script**.
+
+Urutan: `npm run db:migrate -- --check` → `npm run db:migrate` → `npm run db:verify` → deploy aplikasi → smoke test tab **RAB & PTK**.
+
+| # | Kriteria S2a | Cara |
+|---|---|---|
+| 1 | Migrasi 0002 tereksekusi (27 tabel FORCE RLS, 110 policy) | `npm test -- tests/unit/migrations.test.ts` (PGlite, tanpa server DB) |
+| 2 | `contract_value_current` ter-backfill dari CO approved lama | test migrasi `backfill contract_value_current` |
+| 3 | Baseline tunggal & immutable | test `partial unique index` + `BUDGET_TRANSITIONS` |
+| 4 | Pagu 90% / 100% / 110% benar (Decimal) | `npm test -- tests/unit/budgeting.test.ts` |
+| 5 | PTK dampak negatif diterima; ADD negatif ditolak | test Zod `createVariationSchema` |
+| 6 | Satu sumber nilai kontrak; PTK APPROVED/CANCELLED mengubah kontrak | `npm test -- tests/unit/finance.test.ts` + test trigger migrasi |
+| 7 | RAB internal hanya ADMIN/PM/FINANCE (fail-closed tanpa GUC) | test matriks peran + policy RESTRICTIVE |
+| 8 | `budgetLineId` lintas proyek ditolak | test trigger `expense_lines` |
+| 9 | Build / typecheck / lint / test / audit hijau | lihat tabel S1 + `env -u DATABASE_URL npm run build` |
+| 10 | Smoke UI | buat RAB DRAFT → submit → approve → baseline → buat PTK → approve → implementasi; cek revisi baseline & nilai kontrak |
+
+Rincian: [`docs/modules/BUDGETING-PTK.md`](../modules/BUDGETING-PTK.md).
+
 ## Variabel environment
 
 | Variabel | Wajib | Catatan |
@@ -45,6 +67,9 @@
 
 - **Koneksi pool + `SET LOCAL`**: `withCompany()` membungkus tiap request dalam transaksi. Jangan menambah query di luar `companyRoute()`/`withCompany()` — RLS akan menolaknya (fail-closed).
 - **`_migrations`** mencatat file yang sudah diterapkan; jangan mengedit file SQL yang sudah terpakai, buat file baru.
+- **S2a `app.current_permissions`**: script SQL manual yang tidak menyetel GUC ini akan melihat 0 baris RAB internal (fail-closed, disengaja).
+- **Rekalkulasi termin** saat `IMPLEMENT` melewati termin yang sudah ditagihkan (tidak menurunkan nilai di bawah tagihan); `contract_terms.invoiced_amount` permanen menyusul di S2b.
+- **Keanggotaan proyek** (`project_members`) wajib ada untuk peran non-ADMIN; `npm run db:seed:demo` sudah mengisinya, produksi harus dipastikan manual.
 - **Control-plane belum di-RLS** (`users`, `sessions`, `companies`, `memberships`, `invitations`, `auth_events`, katalog). Akses dijaga di aplikasi; pemisahan role DB direncanakan S2.
 - **Token undangan** belum dikirim email — admin menyalin tautan manual. Integrasi email/SSO menyusul.
 - **Rate limit login** berbasis tabel `auth_events`; belum ada lockout per akun/MFA.

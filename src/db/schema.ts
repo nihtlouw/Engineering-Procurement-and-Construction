@@ -111,6 +111,8 @@ export const projects = pgTable("projects", {
   contractNumber: text("contract_number"),
   contractDate: date("contract_date"),
   contractValue: money("contract_value"),
+  /** S2a: SATU sumber nilai kontrak berjalan = contractValue + CO/PTK approved. Dijaga trigger DB. */
+  contractValueCurrent: money("contract_value_current"),
   contractPpn: money("contract_ppn"),
   retentionPct: numeric("retention_pct", { precision: 5, scale: 2 }).notNull().default("5"),
   warrantyMonths: integer("warranty_months").notNull().default(12),
@@ -169,6 +171,12 @@ export const budgetVersions = pgTable(
     approvedAt: timestamp("approved_at", { withTimezone: true }),
     createdById: text("created_by_id").notNull().references(() => users.id),
     createdAt: createdAt(),
+    // S2a: revisi & immutability baseline
+    revisionNote: text("revision_note"),
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    supersededBy: text("superseded_by"),
+    sourceVariationId: text("source_variation_id"),
+    createdFromVersionId: text("created_from_version_id"),
   },
   (table) => [uniqueIndex("budget_version_unique").on(table.projectId, table.type, table.versionNo)],
 );
@@ -186,6 +194,14 @@ export const budgetLines = pgTable("budget_lines", {
   total: money("total"),
   contingencyPct: numeric("contingency_pct", { precision: 5, scale: 2 }),
   sortOrder: integer("sort_order").notNull().default(0),
+  // S2a: status pos (ACTIVE/OMITTED), asal PTK, hook WBS (S5) & Price Reference (S6).
+  // Kolom turunan computed_total/contingency_amount/pagu_amount ADA di DB tetapi
+  // sengaja tidak dipetakan Drizzle agar kloning baris lama tidak menulis kolom generated.
+  lineStatus: text("line_status").notNull().default("ACTIVE"),
+  variationAction: text("variation_action"),
+  sourceVariationId: text("source_variation_id"),
+  wbsItemId: text("wbs_item_id"),
+  keywords: text("keywords"),
 });
 
 export const contractTerms = pgTable("contract_terms", {
@@ -534,3 +550,61 @@ export const projectRelations = relations(projects, ({ many }) => ({
   expenses: many(expenses),
   invoices: many(customerInvoices),
 }));
+
+
+/* -------------------------------------------------------------------------- */
+/* S2a · PTK / Variation Order & phasing RAB                                  */
+/* -------------------------------------------------------------------------- */
+
+export const variationOrders = pgTable("variation_orders", {
+  id: id(),
+  companyId: uuid("company_id").notNull().default(sql`app_current_company_id()`),
+  projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  code: text("code").notNull().unique(),
+  variationType: text("variation_type").notNull(),          // ADD | OMIT | SUBSTITUTE
+  title: text("title").notNull(),
+  reason: text("reason").notNull(),
+  scopeDescription: text("scope_description").notNull(),
+  priceImpact: money("price_impact"),                      // BERTANDA
+  costImpact: money("cost_impact"),                        // BERTANDA
+  timeImpactDays: integer("time_impact_days").notNull().default(0), // BERTANDA
+  status: text("status").notNull().default("DRAFT"),
+  clientReference: text("client_reference"),
+  clientApprovedAt: timestamp("client_approved_at", { withTimezone: true }),
+  clientApprovedBy: text("client_approved_by").references(() => users.id),
+  evidenceFileId: text("evidence_file_id").references(() => fileObjects.id),
+  contractValueBefore: money("contract_value_before"),
+  contractValueAfter: money("contract_value_after"),
+  cancelReason: text("cancel_reason"),
+  implementedAt: timestamp("implemented_at", { withTimezone: true }),
+  createdById: text("created_by_id").notNull().references(() => users.id),
+  createdAt: createdAt(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [index("variation_orders_project_idx").on(table.companyId, table.projectId, table.status)]);
+
+export const variationOrderLines = pgTable("variation_order_lines", {
+  id: id(),
+  companyId: uuid("company_id").notNull().default(sql`app_current_company_id()`),
+  variationOrderId: text("variation_order_id").notNull().references(() => variationOrders.id, { onDelete: "cascade" }),
+  action: text("action").notNull(),                        // ADD | OMIT | ADJUST
+  budgetType: text("budget_type").notNull().default("INTERNAL"),
+  budgetLineId: text("budget_line_id"),
+  description: text("description").notNull(),
+  quantity: quantity("quantity"),
+  unitCode: text("unit_code").notNull().default("Ls"),
+  unitAmount: money("unit_amount"),
+  priceAmount: money("price_amount"),
+  costAmount: money("cost_amount"),
+  sortOrder: integer("sort_order").notNull().default(0),
+}, (table) => [index("variation_lines_order_idx").on(table.variationOrderId, table.sortOrder)]);
+
+/** Hook B7: distribusi nilai pos RAB per periode untuk kurva-S (S5). */
+export const budgetPhasing = pgTable("budget_phasing", {
+  id: id(),
+  companyId: uuid("company_id").notNull().default(sql`app_current_company_id()`),
+  budgetLineId: text("budget_line_id").notNull().references(() => budgetLines.id, { onDelete: "cascade" }),
+  wbsItemId: text("wbs_item_id"),
+  periodStart: date("period_start").notNull(),
+  plannedValue: money("planned_value"),
+  createdAt: createdAt(),
+}, (table) => [uniqueIndex("budget_phasing_unique").on(table.budgetLineId, table.periodStart)]);

@@ -44,7 +44,7 @@ export default function EPCApp({ initialData }: { initialData: AppData }) {
       const [next, pid, tab] = window.location.hash.replace(/^#\/?/, "").split("/");
       if (next && navItems.some((n) => n.id === next)) setView(next);
       if (pid && data.projects.some((p) => p.id === pid)) setProjectId(pid);
-      if (tab && ["summary", "budget", "schedule", "procurement", "billing", "changes", "handover", "documents"].includes(tab)) setProjectTab(tab);
+      if (tab && ["summary", "budget", "budgeting", "schedule", "procurement", "billing", "changes", "handover", "documents"].includes(tab)) setProjectTab(tab);
     };
     applyHash();
     window.addEventListener("popstate", applyHash);

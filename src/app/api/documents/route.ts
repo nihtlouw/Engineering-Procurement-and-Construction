@@ -36,7 +36,7 @@ async function POSTHandler(request: Request) {
     }
     if (body.templateCode === "PROGRESS_REPORT") {
       const items = await db.select().from(scheduleItems).where(eq(scheduleItems.projectId, project.id));
-      const metrics = calculateProjectMetrics({ project, expenses: [], purchases: [], invoices: [], budgets: [], changeOrders: [], schedule: items, canViewInternal: false });
+      const metrics = calculateProjectMetrics({ project, expenses: [], purchases: [], invoices: [], budgets: [], schedule: items, canViewInternal: false });
       snapshot.progressPct = String(metrics.progressPct); snapshot.scheduleRows = JSON.stringify(items.map((i) => ({ activity: i.name, plan: formatDate(i.plannedEnd), progress: `${i.progressPct}%`, status: i.status })));
     }
     if (body.templateCode === "RAB_CLIENT") {
