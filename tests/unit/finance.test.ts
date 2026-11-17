@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { buildCloseCheck, calculateProjectMetrics, displayInvoiceStatus, invoiceBalance } from "@/lib/finance";
 
-const project = { id: "p1", contractValue: "1000000000", retentionPct: "5", bast1Date: null, bast2Date: null };
+const project = { id: "p1", contractValue: "1000000000", contractValueCurrent: "1000000000", retentionPct: "5", bast1Date: null, bast2Date: null };
 const base = {
-  project, expenses: [], purchases: [], invoices: [], budgets: [], changeOrders: [],
+  project, expenses: [], purchases: [], invoices: [], budgets: [],
   schedule: [], canViewInternal: true,
 };
 
@@ -50,15 +50,14 @@ describe("metrik proyek", () => {
     expect(result.progressPct).toBe(40);
   });
 
-  it("nilai kontrak berjalan termasuk change order yang disetujui", () => {
+  it("S2a: nilai kontrak berjalan dibaca dari SATU kolom, bukan dijumlah ulang dari CO", () => {
     const result = calculateProjectMetrics({
       ...base,
-      changeOrders: [
-        { projectId: "p1", status: "APPROVED", priceImpact: "100000000" },
-        { projectId: "p1", status: "DRAFT", priceImpact: "900000000" },
-      ],
+      project: { ...project, contractValue: "1000000000", contractValueCurrent: "1100000000" },
     });
     expect(result.contractValueCurrent).toBe("1100000000.00");
+    // Retensi 5% ikut nilai kontrak berjalan (bukan kontrak awal).
+    expect(result.retentionOutstanding).toBe("55000000.00");
   });
 
   it("biaya aktual hanya dari expense APPROVED pada proyek ini", () => {

@@ -6,6 +6,7 @@ Migrasi SQL **berversi dan wajib** — `drizzle-kit push` hanya untuk percobaan 
 |---|---|
 | `0000_tenant_foundation.sql` | `companies`, `memberships`, `invitations`, `auth_events`, `company_id` + backfill non-destruktif pada 24 tabel bisnis, FK, index, unique partial index baseline, view `audit_logs`, trigger immutability |
 | `0001_rls_policies.sql` | `ENABLE` + **`FORCE` ROW LEVEL SECURITY** dan policy SELECT/INSERT/UPDATE/DELETE per company |
+| `0002_s2a_budgeting_ptk.sql` | S2a: kolom turunan pos RAB, `projects.contract_value_current` (satu sumber nilai kontrak) + trigger, `variation_orders` / `variation_order_lines` / `budget_phasing`, trigger `budgetLineId` lintas proyek, katalog minimum, dan 2 policy **RESTRICTIVE** untuk RAB internal |
 
 ## Perintah
 
@@ -31,6 +32,7 @@ SELECT set_config('app.current_company_id', '<uuid>', true);  -- true = SET LOCA
 - `FORCE` diperlukan karena user DB yang menjalankan migrasi juga **pemilik tabel**; tanpa `FORCE`, owner melewati RLS.
 - Tanpa scope, `app_current_company_id()` = NULL → `SELECT` mengembalikan 0 baris dan `INSERT` gagal (`NOT NULL`). **Fail-closed.**
 - Jangan pernah memakai `SET` (session-level) pada koneksi pool: nilainya bisa terbawa ke request berikutnya.
+- S2a menambah GUC kedua: `app.current_permissions` (daftar izin dipisah koma), juga `SET LOCAL` di transaksi yang sama. Tanpa itu policy RESTRICTIVE RAB internal bersifat **fail-closed** (0 baris).
 
 ## Yang sengaja TIDAK di-RLS (S1)
 
@@ -39,7 +41,7 @@ SELECT set_config('app.current_company_id', '<uuid>', true);  -- true = SET LOCA
 ## Urutan deploy
 
 1. Backup database.
-2. `npm run db:migrate` (0000 lalu 0001, otomatis).
+2. `npm run db:migrate` (0000 → 0001 → 0002, otomatis).
 3. `npm run db:verify`.
 4. Deploy aplikasi.
 5. Cek `/api/health` dan login salah satu akun.

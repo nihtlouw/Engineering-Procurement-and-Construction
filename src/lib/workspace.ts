@@ -4,7 +4,7 @@ import {
   activityLogs, budgetLines, budgetVersions, changeOrders, clients, companySettings, contractTerms,
   costCategories, customerInvoices, customerPayments, documents, expenseLines, expenses, handoverItems,
   notifications, opportunities, progressUpdates, projectMembers, projects, punchItems, purchaseRecords,
-  scheduleItems, sites, units, users,
+  scheduleItems, sites, units, users, variationOrderLines, variationOrders,
 } from "@/db/schema";
 import { hasPermission, safeUser, signFileToken } from "@/lib/auth";
 import type { ProjectMetric, SessionUser, WorkspaceData } from "@/lib/domain";
@@ -17,6 +17,7 @@ export async function getWorkspaceData(user: SessionUser): Promise<WorkspaceData
     allUsers, settingsRows, clientRows, siteRows, opportunityRows, projectRows, memberRows, categoryRows, unitRows,
     budgetRows, budgetLineRows, expenseRows, expenseLineRows, purchaseRows, invoiceRows, paymentRows, termRows,
     scheduleRows, progressRows, changeRows, punchRows, handoverRows, documentRows, activityRows, notificationRows,
+    variationRows, variationLineRows,
   ] = await Promise.all([
     db.select().from(users), db.select().from(companySettings).limit(1), db.select().from(clients), db.select().from(sites),
     db.select().from(opportunities), db.select().from(projects), db.select().from(projectMembers), db.select().from(costCategories),
@@ -25,6 +26,7 @@ export async function getWorkspaceData(user: SessionUser): Promise<WorkspaceData
     db.select().from(contractTerms), db.select().from(scheduleItems), db.select().from(progressUpdates).orderBy(desc(progressUpdates.createdAt)),
     db.select().from(changeOrders), db.select().from(punchItems), db.select().from(handoverItems), db.select().from(documents).orderBy(desc(documents.createdAt)),
     db.select().from(activityLogs).orderBy(desc(activityLogs.createdAt)).limit(150), db.select().from(notifications).where(eq(notifications.userId, user.id)).orderBy(desc(notifications.createdAt)),
+    db.select().from(variationOrders), db.select().from(variationOrderLines),
   ]);
   const safeUsers = allUsers.map(safeUser);
   const scopedIds = user.role === "ADMIN" ? projectRows.map((p) => p.id) : memberRows.filter((m) => m.userId === user.id).map((m) => m.projectId);
@@ -52,7 +54,7 @@ export async function getWorkspaceData(user: SessionUser): Promise<WorkspaceData
   const metrics: Record<string, ProjectMetric> = {};
   const closeChecks: WorkspaceData["closeChecks"] = {};
   for (const project of allowedProjects) {
-    const full = calculateProjectMetrics({ project, expenses: allExpensesWithLines, purchases: purchaseRows, invoices: allInvoicesWithPayments, budgets: budgetRows, changeOrders: changeRows, schedule: scheduleRows, canViewInternal: canInternal });
+    const full = calculateProjectMetrics({ project, expenses: allExpensesWithLines, purchases: purchaseRows, invoices: allInvoicesWithPayments, budgets: budgetRows, schedule: scheduleRows, canViewInternal: canInternal });
     if (!hasPermission(user, "portfolio.view")) continue;
     if (!canProjectExpenses) {
       delete full.actualCost; delete full.pendingCost; delete full.forecastExposure; delete full.remainingBudget; delete full.indicativeMargin;
@@ -64,11 +66,22 @@ export async function getWorkspaceData(user: SessionUser): Promise<WorkspaceData
     closeChecks[project.id] = buildCloseCheck({ projectId: project.id, invoices: allInvoicesWithPayments, expenses: allExpensesWithLines, punchItems: punchRows, handoverItems: handoverRows });
   }
 
+  // S2a · pagu per pos: komitmen PO yang belum direalisasi ikut dihitung.
+  const committedByLine = new Map<string, ReturnType<typeof D>>();
+  for (const po of purchaseRows) {
+    if (!po.budgetLineId || !["ORDERED", "PARTIALLY_RECEIVED", "RECEIVED"].includes(po.status)) continue;
+    committedByLine.set(po.budgetLineId, (committedByLine.get(po.budgetLineId) ?? D(0)).plus(po.dppAmount));
+  }
+
   const visibleBudgets = budgetRows.filter((b) => allowedIds.includes(b.projectId) && ((b.type === "INTERNAL" && canInternal) || (b.type === "CLIENT" && canClient))).map((budget) => ({
     ...budget,
     lines: budgetLineRows.filter((line) => line.budgetVersionId === budget.id).sort((a, b) => a.sortOrder - b.sortOrder).map((line) => {
       const category = categoryMap.get(line.costCategoryId);
-      const enriched: Record<string, unknown> = { ...line, categoryCode: category?.code, categoryName: category?.name };
+      const enriched: Record<string, unknown> = {
+        ...line, categoryCode: category?.code, categoryName: category?.name,
+        paguAmount: money(D(line.total).times(D(1).plus(D(line.contingencyPct ?? 0).div(100)))),
+        committedAmount: money(committedByLine.get(line.id) ?? D(0)),
+      };
       if (budget.type === "INTERNAL") {
         enriched.actualAmount = money(allExpensesWithLines.filter((e) => e.approvalStatus === "APPROVED").reduce((sum, e) => sum.plus(e.lines.filter((l) => l.budgetLineId === line.id && l.scope === "PROJECT").reduce((s, l) => s.plus(l.lineTotal), D(0))), D(0)));
         enriched.pendingAmount = money(allExpensesWithLines.filter((e) => ["SUBMITTED", "NEEDS_CORRECTION"].includes(e.approvalStatus)).reduce((sum, e) => sum.plus(e.lines.filter((l) => l.budgetLineId === line.id && l.scope === "PROJECT").reduce((s, l) => s.plus(l.lineTotal), D(0))), D(0)));
@@ -127,6 +140,7 @@ export async function getWorkspaceData(user: SessionUser): Promise<WorkspaceData
     // Nilai kontrak/PPN/retensi hanya untuk peran berhak (RAB klien).
     contractValue: canClient ? p.contractValue : "",
     contractPpn: canClient ? p.contractPpn : "",
+    contractValueCurrent: canClient ? p.contractValueCurrent : "",
     retentionPct: canClient ? p.retentionPct : "",
     clientName: clientMap.get(p.clientId)?.displayName,
     clientLegalName: clientMap.get(p.clientId)?.legalName,
@@ -141,6 +155,16 @@ export async function getWorkspaceData(user: SessionUser): Promise<WorkspaceData
     npwp: canSeeDirectory ? settingsRows[0]?.npwp : null,
   };
   const companies = await listCompaniesForUser(user.id);
+  // S2a: dampak biaya internal PTK TIDAK pernah dikirim ke peran tanpa izin.
+  const visibleVariations = variationRows.filter((v) => allowedIds.includes(v.projectId)).map((v) => {
+    const serialized: Record<string, unknown> = {
+      ...v,
+      createdByName: userMap.get(v.createdById)?.name,
+      lines: canInternal ? variationLineRows.filter((l) => l.variationOrderId === v.id) : [],
+    };
+    if (!canInternal) delete serialized.costImpact;
+    return serialized;
+  });
 
   return {
     generatedAt: new Date().toISOString(), user, companies, users: visibleDirectory,
@@ -155,6 +179,7 @@ export async function getWorkspaceData(user: SessionUser): Promise<WorkspaceData
     terms: canClient ? termRows.filter((t) => allowedIds.includes(t.projectId)) : [],
     schedule: hasPermission(user, "schedule.view") ? scheduleRows.filter((s) => allowedIds.includes(s.projectId)).map((s) => ({ ...s, ownerName: s.ownerId ? userMap.get(s.ownerId)?.name : null })) : [],
     progressUpdates: hasPermission(user, "schedule.view") ? progressRows.filter((p) => allowedIds.includes(p.projectId)).map((p) => ({ ...p, createdByName: userMap.get(p.createdById)?.name })) : [],
+    variationOrders: canClient ? visibleVariations : [],
     changeOrders: canClient ? changeRows.filter((c) => allowedIds.includes(c.projectId)).map((c) => { const serialized: Record<string, unknown> = { ...c, createdByName: userMap.get(c.createdById)?.name }; if (!canInternal) delete serialized.costImpact; return serialized; }) : [],
     punchItems: punchRows.filter((p) => allowedIds.includes(p.projectId)), handoverItems: handoverRows.filter((h) => allowedIds.includes(h.projectId)),
     documents: visibleDocuments,

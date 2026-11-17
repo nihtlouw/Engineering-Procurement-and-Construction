@@ -5,7 +5,12 @@ import type { CloseCheck, ProjectMetric } from "@/lib/domain";
 type Expense = { id: string; approvalStatus: string; purchaseRecordId: string | null; defaultProjectId: string | null; paidByType: string; totalAmount: string; lines?: { projectId: string | null; scope: string; lineTotal: string }[] };
 type Purchase = { id: string; projectId: string; status: string; dppAmount: string };
 type Invoice = { id: string; projectId: string; type: string; status: string; totalAmount: string; dueDate: string; payments?: { cashReceivedAmount: string; withholdingTaxAmount: string }[] };
-type Project = { id: string; contractValue: string; retentionPct: string; bast1Date: string | null; bast2Date: string | null };
+/**
+ * S2a: `contractValueCurrent` adalah SATU sumber nilai kontrak berjalan
+ * (kolom projects + trigger DB). finance.ts TIDAK BOLEH menjumlah change_orders
+ * lagi — itu sumber kedua yang dulu bikin angka retensi/termin drift.
+ */
+type Project = { id: string; contractValue: string; contractValueCurrent: string; retentionPct: string; bast1Date: string | null; bast2Date: string | null };
 type Budget = { id: string; projectId: string; type: string; status: string; isActiveBaseline: boolean; total: string };
 
 const committed = (status: string) => ["ORDERED", "PARTIALLY_RECEIVED", "RECEIVED"].includes(status);
@@ -26,7 +31,6 @@ export function displayInvoiceStatus(invoice: Invoice) {
 
 export function calculateProjectMetrics(input: {
   project: Project; expenses: Expense[]; purchases: Purchase[]; invoices: Invoice[]; budgets: Budget[];
-  changeOrders: { projectId: string; status: string; priceImpact: string }[];
   schedule: { projectId: string; weight: string; progressPct: string }[]; canViewInternal: boolean;
 }): ProjectMetric {
   const { project } = input;
@@ -43,8 +47,8 @@ export function calculateProjectMetrics(input: {
     return sum.plus(Decimal.max(D(po.dppAmount).minus(poBills), 0));
   }, D(0));
   const commitment = projectPurchases.filter((p) => committed(p.status)).reduce((sum, p) => sum.plus(p.dppAmount), D(0));
-  const changes = input.changeOrders.filter((c) => c.projectId === project.id && ["APPROVED", "IMPLEMENTED"].includes(c.status));
-  const contractValueCurrent = changes.reduce((sum, c) => sum.plus(c.priceImpact), D(project.contractValue));
+  // S2a: baca kolom tunggal, bukan turunan dari change_orders/PTK.
+  const contractValueCurrent = D(project.contractValueCurrent ?? project.contractValue);
   const projectInvoices = input.invoices.filter((i) => i.projectId === project.id);
   const invoiced = projectInvoices.filter((i) => billed(i.status) || i.status === "PAID").reduce((sum, i) => sum.plus(i.totalAmount), D(0));
   const received = projectInvoices.reduce((sum, i) => sum.plus((i.payments ?? []).reduce((s, p) => s.plus(p.cashReceivedAmount).plus(p.withholdingTaxAmount), D(0))), D(0));

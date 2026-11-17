@@ -15,7 +15,11 @@ import { assertRuntimeEnv } from "@/shared/env";
 export async function withCompany<T>(user: SessionUser, fn: () => Promise<T>): Promise<T> {
   assertRuntimeEnv();
   return baseDb.transaction(async (tx) => {
+    // Dua GUC, keduanya SET LOCAL di transaksi yang sama. `app.current_permissions`
+    // dipakai policy RESTRICTIVE RAB internal (S2a). Tanpa ini policy bersifat
+    // fail-closed: RAB INTERNAL tidak terlihat sama sekali.
     await tx.execute(sql`select set_config('app.current_company_id', ${user.companyId}, true)`);
+    await tx.execute(sql`select set_config('app.current_permissions', ${user.permissions.join(",")}, true)`);
     return runWithScope({ companyId: user.companyId, user, tx }, fn);
   });
 }
