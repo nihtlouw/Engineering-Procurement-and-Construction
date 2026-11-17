@@ -3,11 +3,15 @@ import { getWorkspaceData } from "@/lib/workspace";
 import LoginScreen from "@/components/LoginScreen";
 import EPCApp from "@/components/EPCApp";
 import type { AppData } from "@/components/types";
+import { withCompany } from "@/shared/auth/route";
 
 export const dynamic = "force-dynamic";
+
 export default async function HomePage() {
   const user = await getCurrentUser();
-  if (!user) return <LoginScreen demoPassword={process.env.SEED_DEMO_PASSWORD ? null : "DemoEPC2026!"} />;
-  const data = await getWorkspaceData(user);
+  // S1: tidak ada lagi password demo yang dicetak ke halaman login.
+  if (!user) return <LoginScreen />;
+  // SEMUA pembacaan workspace wajib berada di dalam scope company (RLS FORCE).
+  const data = await withCompany(user, () => getWorkspaceData(user));
   return <EPCApp initialData={data as AppData} />;
 }

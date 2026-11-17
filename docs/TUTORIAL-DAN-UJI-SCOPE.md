@@ -7,9 +7,11 @@ cocok untuk cara kerja perusahaan Anda* — bukan untuk programmer.
 apa yang **setengah jalan**, dan apa yang **belum ada** — lalu memutuskan lanjut / minta ubah /
 tidak cocok.
 
-> **Penting sebelum mulai:** pakai **database percobaan**, jangan database produksi. Aplikasi ini
-> otomatis mengisi dirinya dengan data contoh (2 proyek fiktif) kalau tabel pengguna kosong, dan
-> menyediakan akun demo dengan password yang sama untuk semua orang.
+> **Catatan S1 (2026-11-17):** tutorial ini sebagian ditulis untuk versi **pra-S1** dan belum
+> seluruhnya diperbarui. Sejak S1, seed **tidak lagi** berjalan otomatis saat login, tidak ada
+> akun demo di halaman login, dan skema diubah lewat migrasi berversi. Untuk instalasi & deploy
+> pakai [`README.md`](../README.md) dan [`docs/runbook/DEPLOY.md`](runbook/DEPLOY.md) sebagai
+> rujukan utama. Selalu pakai **database percobaan**, jangan database produksi.
 
 ---
 
@@ -38,24 +40,30 @@ npm ci
 cp .env.example .env.local
 ```
 
-Buka `.env.local`, isi tiga baris ini:
+Buka `.env.local`, isi dua baris ini (jangan pernah commit file ini):
 
 ```env
-DATABASE_URL=postgresql://...        # connection string dari Neon / Postgres lokal
-FILE_SIGNING_SECRET=kalimat-rahasia-acak-minimal-32-karakter
-SEED_DEMO_PASSWORD=PasswordUjiSaya2026!
+DATABASE_URL=<connection string dari Neon / Postgres>
+FILE_SIGNING_SECRET=<hasil dari: openssl rand -hex 32>
 ```
 
-```bash
-# 4. buat tabel di database
-npx drizzle-kit push
+`SEED_DEMO_PASSWORD` hanya dipakai bila Anda sengaja ingin mengisi data demo lewat CLI.
 
-# 5. jalankan aplikasi
+```bash
+# 4. terapkan migrasi berversi (bukan drizzle-kit push)
+npm run db:migrate
+npm run db:verify
+
+# 5. opsional: data demo via CLI
+SEED_DEMO_PASSWORD='password-anda' npm run db:seed:demo
+
+# 6. jalankan aplikasi
 npm run dev
 ```
 
-Buka **http://localhost:3000**. Data contoh (2 proyek, 12 pengeluaran, 7 invoice) otomatis
-dibuat saat login pertama.
+Buka **http://localhost:3000**. Data contoh **tidak** dibuat otomatis saat login; akun dibuat
+lewat undangan Admin Perusahaan di menu **Pengguna**. Skenario di bawah yang mengasumsikan
+akun demo otomatis perlu disesuaikan.
 
 ### 1.3 Akun demo
 

@@ -1,3 +1,4 @@
+import { companyRoute } from "@/shared/auth/route";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
@@ -7,7 +8,7 @@ import { D } from "@/lib/format";
 import { newId } from "@/lib/server-services";
 
 const schema = z.object({ legalName: z.string().min(3), displayName: z.string().min(2), npwp: z.string().optional(), address: z.string().optional(), phone: z.string().optional(), email: z.string().email().optional().or(z.literal("")), defaultPpnRate: z.string(), allowSplitExpense: z.boolean() });
-export async function PATCH(request: Request) {
+async function PATCHHandler(request: Request) {
   try {
     const user = await requireUser(); assertPermission(user, "settings.manage"); const body = schema.parse(await request.json());
     const [settings] = await db.select().from(companySettings).limit(1); if (!settings) throw new ApiError("NOT_FOUND", "Pengaturan perusahaan belum tersedia.", 404);
@@ -20,3 +21,5 @@ export async function PATCH(request: Request) {
     return Response.json({ data: { updated: true } });
   } catch (error) { return errorResponse(error); }
 }
+
+export const PATCH = companyRoute(PATCHHandler);

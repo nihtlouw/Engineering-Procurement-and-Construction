@@ -1,3 +1,4 @@
+import { companyRoute } from "@/shared/auth/route";
 import { and, count, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
@@ -24,7 +25,7 @@ const schema = z.object({
   receiptFileId: z.string().nullable().optional(), lines: z.array(lineSchema).min(1),
 });
 
-export async function POST(request: Request) {
+async function POSTHandler(request: Request) {
   try {
     const user = await requireUser(); assertPermission(user, "expense.create");
     const body = schema.parse(await request.json());
@@ -102,3 +103,5 @@ export async function POST(request: Request) {
     return Response.json({ data: { ...result, duplicateReason, isPreBaseline } }, { status: 201 });
   } catch (error) { return errorResponse(error); }
 }
+
+export const POST = companyRoute(POSTHandler);

@@ -1,3 +1,4 @@
+import { companyRoute } from "@/shared/auth/route";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
@@ -7,7 +8,7 @@ import { INVOICE_TRANSITIONS } from "@/lib/domain";
 import { assertTransition, newId, requireProject, requiredReason } from "@/lib/server-services";
 
 const schema = z.object({ action: z.enum(["APPROVE", "SEND", "CANCEL"]), reason: z.string().optional() });
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function POSTHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await requireUser(); const { id } = await params; const body = schema.parse(await request.json());
     const [invoice] = await db.select().from(customerInvoices).where(eq(customerInvoices.id, id)).limit(1);
@@ -26,3 +27,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return Response.json({ data: { id, status: next } });
   } catch (error) { return errorResponse(error); }
 }
+
+export const POST = companyRoute(POSTHandler);

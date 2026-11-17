@@ -1,3 +1,4 @@
+import { companyRoute } from "@/shared/auth/route";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
@@ -9,7 +10,7 @@ import { formatDate, formatIDR, terbilang } from "@/lib/format";
 import { newId, requireProject } from "@/lib/server-services";
 
 const schema = z.object({ action: z.enum(["CREATE", "UPLOAD"]).default("CREATE"), projectId: z.string(), templateCode: z.string().optional(), relatedType: z.string().optional(), relatedId: z.string().optional(), title: z.string().optional(), category: z.string().optional(), fileId: z.string().optional() });
-export async function POST(request: Request) {
+async function POSTHandler(request: Request) {
   try {
     const user = await requireUser(); const body = schema.parse(await request.json()); await requireProject(user, body.projectId, body.action === "UPLOAD" ? "document.upload" : "gendoc.create");
     if (body.action === "UPLOAD") {
@@ -55,3 +56,5 @@ export async function POST(request: Request) {
     return Response.json({ data: { id, blocks, mergeSnapshot: snapshot } }, { status: 201 });
   } catch (error) { return errorResponse(error); }
 }
+
+export const POST = companyRoute(POSTHandler);

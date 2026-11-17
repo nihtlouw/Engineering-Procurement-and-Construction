@@ -1,3 +1,4 @@
+import { companyRoute } from "@/shared/auth/route";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
@@ -7,7 +8,7 @@ import { D, money } from "@/lib/format";
 import { newId, requireProject } from "@/lib/server-services";
 
 const schema = z.object({ amount: z.string(), paidDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), method: z.enum(["CASH", "COMPANY_CARD", "BANK_TRANSFER", "PERSONAL", "OTHER"]), reference: z.string().optional() });
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function POSTHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await requireUser(); assertPermission(user, "settlement.manage"); const { id } = await params; const body = schema.parse(await request.json());
     const [expense] = await db.select().from(expenses).where(eq(expenses.id, id)).limit(1);
@@ -28,3 +29,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return Response.json({ data: { id: settlementId, settlementStatus: status } }, { status: 201 });
   } catch (error) { return errorResponse(error); }
 }
+
+export const POST = companyRoute(POSTHandler);

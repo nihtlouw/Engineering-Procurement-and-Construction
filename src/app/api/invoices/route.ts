@@ -1,3 +1,4 @@
+import { companyRoute } from "@/shared/auth/route";
 import { count, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
@@ -8,7 +9,7 @@ import { newId, requireProject } from "@/lib/server-services";
 
 const schema = z.object({ projectId: z.string(), contractTermId: z.string().nullable().optional(), type: z.enum(["DP", "MOS", "PROGRESS", "FINAL", "RETENTION", "OTHER"]), issueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), dppAmount: z.string(), ppnAmount: z.string(), number: z.string().optional() });
 const roman = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
-export async function POST(request: Request) {
+async function POSTHandler(request: Request) {
   try {
     const user = await requireUser(); assertPermission(user, "invoice.edit"); const body = schema.parse(await request.json());
     await requireProject(user, body.projectId, "invoice.edit");
@@ -33,3 +34,5 @@ export async function POST(request: Request) {
     return Response.json({ data: result }, { status: 201 });
   } catch (error) { return errorResponse(error); }
 }
+
+export const POST = companyRoute(POSTHandler);

@@ -1,3 +1,4 @@
+import { companyRoute } from "@/shared/auth/route";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
@@ -7,7 +8,7 @@ import { D, todayJakarta } from "@/lib/format";
 import { newId, requireProject } from "@/lib/server-services";
 
 const schema = z.object({ clientUuid: z.string().min(8), reportDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), progressPct: z.string(), quantity: z.string().optional(), unitCode: z.string().optional(), note: z.string().min(3), issue: z.string().optional() });
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function POSTHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await requireUser(); assertPermission(user, "progress.create"); const { id } = await params; const body = schema.parse(await request.json());
     const [item] = await db.select().from(scheduleItems).where(eq(scheduleItems.id, id)).limit(1); if (!item) throw new ApiError("NOT_FOUND", "Item jadwal tidak ditemukan.", 404);
@@ -25,3 +26,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return Response.json({ data: { id: updateId, status } }, { status: 201 });
   } catch (error) { return errorResponse(error); }
 }
+
+export const POST = companyRoute(POSTHandler);

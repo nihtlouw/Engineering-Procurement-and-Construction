@@ -1,10 +1,11 @@
+import { publicRoute } from "@/shared/auth/route";
 import { cookies } from "next/headers";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { sessions } from "@/db/schema";
 import { errorResponse, SESSION_COOKIE } from "@/lib/auth";
 
-export async function POST() {
+async function POSTHandler() {
   try {
     const store = await cookies();
     const id = store.get(SESSION_COOKIE)?.value;
@@ -13,3 +14,5 @@ export async function POST() {
     return Response.json({ data: { loggedOut: true } });
   } catch (error) { return errorResponse(error); }
 }
+
+export const POST = publicRoute(POSTHandler);
