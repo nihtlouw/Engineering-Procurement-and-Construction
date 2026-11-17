@@ -4,7 +4,7 @@ Aplikasi manajemen proyek EPC: proyek & klien, PO, RAB, biaya, tagihan, dokumen,
 **Modular monolith**: Next.js 16 App Router · React 19 · TypeScript (strict) · Tailwind 4 · Drizzle ORM + `pg` → PostgreSQL (Neon/Supabase) · Zod · decimal.js · pdf-lib · exceljs. Deploy: Vercel.
 
 > Baseline kondisi & roadmap: [`docs/AUDIT-EPC-2026-11-17.md`](docs/AUDIT-EPC-2026-11-17.md).
-> Status saat ini: **S1 selesai** — fondasi company/RLS/Auth & RBAC. Modul lain menyusul per sprint.
+> Status saat ini: **S1 + S2a + S2b selesai** — fondasi company/RLS/Auth, RAB/PTK, serta PO/termin/CO. Modul lain menyusul per sprint.
 
 ## Setup lokal
 
@@ -49,6 +49,17 @@ Verifikasi: `npm test` menjalankan uji SQL migrasi + isolasi RLS memakai Postgre
 
 Rincian desain, matriks peran, API, dan acceptance criteria: [`docs/modules/BUDGETING-PTK.md`](docs/modules/BUDGETING-PTK.md).
 
+## S2b — PO berbasis pos, termin & CO lama
+
+- `po_items` tertaut ke baseline RAB; PO lama di-backfill **non-destruktif** menjadi satu pos. Penerimaan barang dicatat per pos dengan `qty diterima ≤ qty pesan`.
+- `PO_BILL` direkonsiliasi per pos terhadap nilai barang **yang sudah diterima**; baris tagihan wajib memilih pos PO bila PO memilikinya.
+- `contract_terms.invoiced_amount` / `status` adalah satu sumber kumulatif tagihan, dijaga trigger DB (`OPEN → PARTIALLY_INVOICED → INVOICED`; `CLOSED` manual tidak ditimpa).
+- Pagu **kumulatif per termin** dan **nilai kontrak berjalan** menolak double-invoice. Over-invoice hanya lolos dengan alasan ≥5 karakter **dan** izin `invoice.approve`; trigger DB fail-closed bila GUC permission kosong.
+- CO lama tidak dihapus: dampak `ADD/OMIT/SUBSTITUTE` bertanda, bukti/referensi klien, pembatalan, dan implementasi tanpa hardcode `cat-civ`. Perubahan baru tetap direkomendasikan lewat PTK `variation_orders`.
+- Tab baru **PO & Termin**; panel lama (Pengadaan, Tagihan, Change Order) tetap dipertahankan.
+
+Rincian: [`docs/modules/PROCUREMENT-TERMIN-CO.md`](docs/modules/PROCUREMENT-TERMIN-CO.md).
+
 ## Perintah
 
 | Perintah | Kegunaan |
@@ -83,6 +94,7 @@ Checklist deploy lengkap: [`docs/runbook/DEPLOY.md`](docs/runbook/DEPLOY.md).
 src/
 ├── app/(app)/            # workspace (SSR) + loading/error boundaries
 ├── modules/budgeting/    # S2a: types, validation, pagu, service, UI
+├── modules/procurement/  # S2b: types, validation, service, UI
 ├── app/api/              # route handler, dibungkus companyRoute()/publicRoute()
 ├── app/accept-invite/    # halaman penerimaan undangan
 ├── modules/companies/    # modul pertama: types, validation, service, ui
@@ -98,6 +110,8 @@ tests/                    # unit + integrasi
 ## Dokumentasi
 
 - `docs/AUDIT-EPC-2026-11-17.md` — audit, 10 masalah, arsitektur, roadmap, addendum budgeting/PTK.
+- `docs/modules/BUDGETING-PTK.md` — desain S2a.
+- `docs/modules/PROCUREMENT-TERMIN-CO.md` — desain S2b, API, migrasi, dan acceptance criteria.
 - `docs/TUTORIAL-DAN-UJI-SCOPE.md` — tutorial & skenario uji (sebagian mengacu UI pra-S1).
 - `docs/RINGKASAN-DESAIN-UI.md` — keputusan desain antarmuka.
 - `public/docs/Panduan-Ardaya-EPC.pdf` — panduan pemakaian (21 halaman, bahasa Indonesia).

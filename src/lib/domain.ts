@@ -61,6 +61,7 @@ export const LABELS: Record<string, string> = {
   AWARDED: "Dimenangkan", LOST: "Kalah", QUALIFIED: "Terkualifikasi", ESTIMATING: "Estimasi", INTERNAL_REVIEW: "Review Internal",
   CLARIFICATION: "Klarifikasi", FINAL_DOC: "Final", ACTIVE: "Aktif", IMPLEMENTED: "Diimplementasikan", AWAITING_CLIENT: "Menunggu Klien",
   ADD: "Pekerjaan Tambah", OMIT: "Pekerjaan Kurang", SUBSTITUTE: "Substitusi", ADJUST: "Disesuaikan",
+  OPEN: "Belum Ditagih", PARTIALLY_INVOICED: "Sebagian Ditagih", INVOICED: "Ditagih Penuh",
 };
 
 /**
