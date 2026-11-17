@@ -7,10 +7,12 @@ import { assertPermission, errorResponse, requireUser } from "@/lib/auth";
 import { D, money } from "@/lib/format";
 import { newId, requireProject } from "@/lib/server-services";
 import { enforcePagu } from "@/modules/budgeting/service";
+import { enforcePoBillItems } from "@/modules/procurement/service";
 
 const lineSchema = z.object({
   scope: z.enum(["PROJECT", "OVERHEAD"]).default("PROJECT"), projectId: z.string().nullable().optional(),
   costCategoryId: z.string().min(1, "Kategori wajib dipilih."), budgetLineId: z.string().nullable().optional(),
+  poItemId: z.string().nullable().optional(),
   description: z.string().min(3, "Uraian baris minimal 3 karakter."), quantity: z.string().default("1"),
   unitCode: z.string().default("Ls"), unitPrice: z.string(), discountAmount: z.string().default("0"),
 });
@@ -90,6 +92,10 @@ async function POSTHandler(request: Request) {
       const previous = await db.select().from(expenseLines).innerJoin(expenses, eq(expenses.id, expenseLines.expenseId)).where(and(eq(expenses.purchaseRecordId, po.id), eq(expenses.approvalStatus, "APPROVED")));
       const billed = previous.reduce((sum, row) => sum.plus(row.expense_lines.lineTotal), D(0));
       if (billed.plus(dpp).gt(po.dppAmount) && (!body.overBillReason || body.overBillReason.trim().length < 5)) return Response.json({ code: "PO_OVERBILL_REASON_REQUIRED", message: "Akumulasi tagihan melebihi nilai PO. Alasan wajib diisi.", details: { poAmount: po.dppAmount, billed: money(billed), newBill: money(dpp) } }, { status: 422 });
+      // S2b: rekonsiliasi PER POS terhadap barang yang benar-benar diterima.
+      await enforcePoBillItems(po.id, rawLines.map((line, index) => ({
+        poItemId: line.poItemId, budgetLineId: line.budgetLineId, lineTotal: finalTotals[index],
+      })));
     }
     const id = newId(); const year = new Date().getFullYear();
     const result = await db.transaction(async (tx) => {
@@ -108,7 +114,7 @@ async function POSTHandler(request: Request) {
         receiptFileId: body.receiptFileId, note: [body.note, body.overBillReason ? `Alasan kelebihan tagihan PO: ${body.overBillReason}` : null].filter(Boolean).join("\n"),
         clientUuid: body.clientUuid, createdById: user.id,
       });
-      await tx.insert(expenseLines).values(rawLines.map((line, index) => ({ id: newId(), expenseId: id, scope: line.scope, projectId: line.projectId, costCategoryId: line.costCategoryId, budgetLineId: line.budgetLineId, description: line.description, quantity: line.quantity, unitCode: line.unitCode, unitPrice: money(D(line.unitPrice).times(rate)), discountAmount: money(D(line.discountAmount).times(rate)), lineTotal: money(finalTotals[index]), sortOrder: index })));
+      await tx.insert(expenseLines).values(rawLines.map((line, index) => ({ id: newId(), expenseId: id, scope: line.scope, projectId: line.projectId, costCategoryId: line.costCategoryId, budgetLineId: line.budgetLineId, poItemId: line.poItemId ?? null, description: line.description, quantity: line.quantity, unitCode: line.unitCode, unitPrice: money(D(line.unitPrice).times(rate)), discountAmount: money(D(line.discountAmount).times(rate)), lineTotal: money(finalTotals[index]), sortOrder: index })));
       await tx.insert(activityLogs).values({ id: newId(), actorId: user.id, objectType: "EXPENSE", objectId: id, projectId: projectIds[0], action: "CREATED", changes: [{ field: "dppAmount", old: null, new: money(dpp) }, { field: "approvalStatus", old: null, new: "DRAFT" }], reason: duplicateReason });
       return { id, code };
     });

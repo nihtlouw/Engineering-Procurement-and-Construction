@@ -376,13 +376,16 @@ async function implementVariation(
   ]);
   const skippedTerms: string[] = [];
   for (const term of terms) {
-    if (!term.percent) continue;
+    // S2b: `invoicedAmount` dijaga trigger DB dan merupakan SATU sumber kumulatif.
+    // Termin manual (isAutoAmount=false) atau sudah ditagihkan penuh tidak diubah.
+    if (!term.percent || !term.isAutoAmount || term.status === "CLOSED" || term.status === "INVOICED") continue;
     const newAmount = money(D(term.percent).div(100).times(finalProject.contractValueCurrent));
-    const invoiced = invoices.filter((i) => i.contractTermId === term.id && i.status !== "CANCELLED")
-      .reduce((s, i) => s.plus(i.totalAmount), D(0));
+    const invoiced = D(term.invoicedAmount ?? 0);
     if (D(newAmount).lt(invoiced)) { skippedTerms.push(term.id); continue; }
     await db.update(contractTerms).set({ amount: newAmount }).where(eq(contractTerms.id, term.id));
   }
+  // `invoices` tetap dipakai untuk audit diff; kumulatif tagihan tidak dihitung ulang di sini.
+  void invoices;
 
   await log({
     actorId: user.id, objectType: "VARIATION_ORDER", objectId: vo.id, projectId: vo.projectId, action: "IMPLEMENTED",

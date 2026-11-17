@@ -2,7 +2,7 @@ import { companyRoute } from "@/shared/auth/route";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import { activityLogs, budgetLines, budgetVersions, changeOrders, documents, expenseLines, expenses, handoverItems, projects, punchItems, scheduleItems } from "@/db/schema";
+import { activityLogs, budgetLines, budgetVersions, changeOrders, costCategories, documents, expenseLines, expenses, handoverItems, projects, punchItems, scheduleItems } from "@/db/schema";
 import { ApiError, assertPermission, errorResponse, requireUser } from "@/lib/auth";
 import { STAGES } from "@/lib/domain";
 import { buildCloseCheck } from "@/lib/finance";
@@ -72,26 +72,38 @@ async function POSTHandler(request: Request, { params }: { params: Promise<{ id:
       if (!co || co.projectId !== projectId) throw new ApiError("NOT_FOUND", "Change order tidak ditemukan.", 404);
       if (co.status !== "APPROVED") throw new ApiError("CO_NOT_APPROVED", "Change order harus APPROVED sebelum diimplementasikan.", 409);
       const active = await db.select().from(budgetVersions).where(and(eq(budgetVersions.projectId, projectId), eq(budgetVersions.isActiveBaseline, true)));
+      // S2b: kategori diambil dari katalog aktif, bukan hardcode "cat-civ".
+      const [fallbackCategory] = await db.select({ id: costCategories.id }).from(costCategories).where(eq(costCategories.isActive, true)).limit(1);
+      if (!fallbackCategory) throw new ApiError("CATEGORY_REQUIRED", "Isi katalog kategori biaya terlebih dahulu.", 422);
+      // Dampak waktu BERTANDA tidak boleh memundurkan target sebelum tanggal mulai.
+      const plannedEnd = project.targetEndDate ? new Date(`${project.targetEndDate}T12:00:00+07:00`) : null;
+      if (plannedEnd) plannedEnd.setDate(plannedEnd.getDate() + co.timeImpactDays);
+      const nextEndDate = plannedEnd?.toISOString().slice(0, 10) ?? project.targetEndDate;
+      if (project.startDate && nextEndDate && nextEndDate < project.startDate) {
+        throw new ApiError("SCHEDULE_UNDERFLOW", "Dampak waktu CO membuat target selesai lebih awal dari tanggal mulai.", 422);
+      }
       const created: string[] = [];
       await db.transaction(async (tx) => {
         for (const baseline of active) {
           const impact = baseline.type === "INTERNAL" ? D(co.costImpact) : D(co.priceImpact);
           const versionNo = baseline.versionNo + 1; const newBudgetId = newId();
           await tx.update(budgetVersions).set({ isActiveBaseline: false, status: "SUPERSEDED" }).where(eq(budgetVersions.id, baseline.id));
-          await tx.insert(budgetVersions).values({ id: newBudgetId, projectId, type: baseline.type, versionNo, status: "APPROVED", isActiveBaseline: false, changeOrderId: co.id, total: D(baseline.total).plus(impact).toFixed(2), approvedById: user.id, approvedAt: new Date(), createdById: user.id });
+          await tx.insert(budgetVersions).values({ id: newBudgetId, projectId, type: baseline.type, versionNo, status: "BASELINE", isActiveBaseline: false, changeOrderId: co.id, total: D(baseline.total).plus(impact).toFixed(2), approvedById: user.id, approvedAt: new Date(), createdById: user.id, sourceVariationId: null, createdFromVersionId: baseline.id, lockedAt: new Date(), revisionNote: `Revisi otomatis ${co.code}` });
           const oldLines = await tx.select().from(budgetLines).where(eq(budgetLines.budgetVersionId, baseline.id));
           if (oldLines.length) await tx.insert(budgetLines).values(oldLines.map((l) => ({ ...l, id: newId(), budgetVersionId: newBudgetId })));
           if (!impact.isZero()) {
-            const category = baseline.type === "INTERNAL" ? "cat-civ" : "cat-civ";
-            await tx.insert(budgetLines).values({ id: newId(), budgetVersionId: newBudgetId, costCategoryId: category, code: `CO-${co.code}`, description: co.scopeDescription, quantity: "1", unitCode: "Ls", unitAmount: impact.toFixed(2), total: impact.toFixed(2), sortOrder: oldLines.length + 1 });
+            await tx.insert(budgetLines).values({
+              id: newId(), budgetVersionId: newBudgetId, costCategoryId: fallbackCategory.id,
+              code: `CO-${co.code}`, description: co.scopeDescription, quantity: "1", unitCode: "Ls",
+              unitAmount: impact.toFixed(2), total: impact.toFixed(2), sortOrder: oldLines.length + 1,
+              lineStatus: "ACTIVE", variationAction: impact.lt(0) ? "OMIT" : "ADD", sourceVariationId: null,
+            });
           }
           await tx.update(budgetVersions).set({ status: "BASELINE", isActiveBaseline: true }).where(eq(budgetVersions.id, newBudgetId)); created.push(newBudgetId);
         }
-        const newDate = project.targetEndDate ? new Date(`${project.targetEndDate}T12:00:00+07:00`) : null;
-        if (newDate) newDate.setDate(newDate.getDate() + co.timeImpactDays);
-        await tx.update(changeOrders).set({ status: "IMPLEMENTED" }).where(eq(changeOrders.id, co.id));
-        await tx.update(projects).set({ targetEndDate: newDate?.toISOString().slice(0, 10) ?? project.targetEndDate, updatedAt: new Date() }).where(eq(projects.id, projectId));
-        await tx.insert(activityLogs).values({ id: newId(), actorId: user.id, objectType: "CHANGE_ORDER", objectId: co.id, projectId, action: "IMPLEMENTED", changes: [{ field: "status", old: co.status, new: "IMPLEMENTED" }, { field: "baselineIds", old: active.map((b) => b.id), new: created }, { field: "targetEndDate", old: project.targetEndDate, new: newDate?.toISOString().slice(0, 10) }] });
+        await tx.update(changeOrders).set({ status: "IMPLEMENTED", clientApprovedAt: co.clientApprovedAt ?? new Date(), clientApprovedBy: co.clientApprovedBy ?? user.id }).where(eq(changeOrders.id, co.id));
+        await tx.update(projects).set({ targetEndDate: nextEndDate, updatedAt: new Date() }).where(eq(projects.id, projectId));
+        await tx.insert(activityLogs).values({ id: newId(), actorId: user.id, objectType: "CHANGE_ORDER", objectId: co.id, projectId, action: "IMPLEMENTED", changes: [{ field: "status", old: co.status, new: "IMPLEMENTED" }, { field: "baselineIds", old: active.map((b) => b.id), new: created }, { field: "targetEndDate", old: project.targetEndDate, new: nextEndDate }, { field: "priceImpact", old: null, new: co.priceImpact }, { field: "timeImpactDays", old: null, new: co.timeImpactDays }] });
       });
       return Response.json({ data: { id: co.id, status: "IMPLEMENTED", budgetIds: created } });
     }

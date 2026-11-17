@@ -4,7 +4,7 @@
 
 1. **Backup** database produksi (snapshot + uji restore). Migrasi S1 menambah kolom `NOT NULL` + backfill; tidak ada down script.
 2. Set environment di Vercel: `DATABASE_URL`, `FILE_SIGNING_SECRET` (≥ 32 char acak). Pastikan `SEED_DEMO_PASSWORD` **tidak** diset di production.
-3. Jalankan migrasi dari mesin yang punya akses DB (bukan dari Vercel runtime). Runner otomatis menerapkan `0000 → 0001 → 0002`:
+3. Jalankan migrasi dari mesin yang punya akses DB (bukan dari Vercel runtime). Runner otomatis menerapkan `0000 → 0001 → 0002 → 0003`:
    ```bash
    npm ci
    cp .env.example .env.local   # isi DATABASE_URL produksi
@@ -39,7 +39,7 @@ Urutan: `npm run db:migrate -- --check` → `npm run db:migrate` → `npm run db
 
 | # | Kriteria S2a | Cara |
 |---|---|---|
-| 1 | Migrasi 0002 tereksekusi (27 tabel FORCE RLS, 110 policy) | `npm test -- tests/unit/migrations.test.ts` (PGlite, tanpa server DB) |
+| 1 | Rangkaian 0000–0003 tereksekusi (28 tabel FORCE RLS, 114 policy) | `npm test -- tests/unit/migrations.test.ts` (PGlite, tanpa server DB) |
 | 2 | `contract_value_current` ter-backfill dari CO approved lama | test migrasi `backfill contract_value_current` |
 | 3 | Baseline tunggal & immutable | test `partial unique index` + `BUDGET_TRANSITIONS` |
 | 4 | Pagu 90% / 100% / 110% benar (Decimal) | `npm test -- tests/unit/budgeting.test.ts` |
@@ -51,6 +51,26 @@ Urutan: `npm run db:migrate -- --check` → `npm run db:migrate` → `npm run db
 | 10 | Smoke UI | buat RAB DRAFT → submit → approve → baseline → buat PTK → approve → implementasi; cek revisi baseline & nilai kontrak |
 
 Rincian: [`docs/modules/BUDGETING-PTK.md`](../modules/BUDGETING-PTK.md).
+
+## Deploy S2b (PO + termin + CO lama)
+
+`0003_s2b_po_terms_co.sql` adalah migrasi **forward-only** atas DB yang sudah memakai 0000/0001/0002. Backup wajib: ia menambah tabel `po_items`, kolom `NOT NULL`, constraint, trigger, dan melakukan backfill per company. **Tidak ada down script.**
+
+Urutan: backup → `npm run db:migrate -- --check` → `npm run db:migrate` → `npm run db:verify` → deploy aplikasi → smoke test tab **PO & Termin**.
+
+| # | Kriteria S2b | Cara |
+|---|---|---|
+| 1 | `0003` lolos dari DB pra-S1 tanpa server eksternal | `npm test -- tests/unit/migrations.test.ts` (24 test PGlite) |
+| 2 | Backfill PO lama jadi satu pos, termin terisi dari invoice existing | test `backfill PO lama menjadi satu pos` |
+| 3 | `qty diterima <= qty pesan` | test CHECK `po_item_received_bounds` |
+| 4 | Pagu termin + kontrak fail-closed; over-invoice butuh alasan + `invoice.approve` | `npm test -- tests/unit/procurement.test.ts` + test trigger PGlite |
+| 5 | Status termin mengikuti invoice & perubahan amount | test `recalc_contract_term_invoiced` / `contract_terms_status_recalc` |
+| 6 | `PO_BILL` wajib per pos dan tidak boleh menagih barang belum diterima | `enforcePoBillItems()` + trigger `expense_lines_po_item_scope` |
+| 7 | CO lama bisa dibatalkan; dampak bertanda; tidak ada hardcode kategori | smoke UI + `npm test` |
+| 8 | Build / typecheck / lint / test / audit hijau | lihat tabel S1 |
+| 9 | Smoke UI | buat PO berbasis pos → catat penerimaan sebagian → buat invoice melebihi termin (harus ditolak) → ulangi dengan alasan + akun `invoice.approve` → cek status termin |
+
+Rincian: [`docs/modules/PROCUREMENT-TERMIN-CO.md`](../modules/PROCUREMENT-TERMIN-CO.md).
 
 ## Variabel environment
 
@@ -66,9 +86,9 @@ Rincian: [`docs/modules/BUDGETING-PTK.md`](../modules/BUDGETING-PTK.md).
 ## Catatan operasional & risiko sisa
 
 - **Koneksi pool + `SET LOCAL`**: `withCompany()` membungkus tiap request dalam transaksi. Jangan menambah query di luar `companyRoute()`/`withCompany()` — RLS akan menolaknya (fail-closed).
-- **`_migrations`** mencatat file yang sudah diterapkan; jangan mengedit file SQL yang sudah terpakai, buat file baru.
-- **S2a `app.current_permissions`**: script SQL manual yang tidak menyetel GUC ini akan melihat 0 baris RAB internal (fail-closed, disengaja).
-- **Rekalkulasi termin** saat `IMPLEMENT` melewati termin yang sudah ditagihkan (tidak menurunkan nilai di bawah tagihan); `contract_terms.invoiced_amount` permanen menyusul di S2b.
+- **`_migrations`** mencatat file yang sudah diterapkan; jangan mengedit file SQL yang sudah terpakai, buat file baru. `0002` dan `0003` wajib dijalankan manual sebelum production karena Vercel tidak menjalankan migrasi dari runtime aplikasi.
+- **S2a/S2b `app.current_permissions`**: script SQL manual yang tidak menyetel GUC ini akan melihat 0 baris RAB internal (fail-closed) dan tidak dapat meloloskan over-invoice (butuh `invoice.approve`).
+- **Rekalkulasi termin** saat `IMPLEMENT` melewati termin yang sudah ditagihkan (tidak menurunkan nilai di bawah tagihan). S2b memakai `contract_terms.invoiced_amount` yang dijaga trigger sebagai sumber kumulatif; termin `INVOICED` / `CLOSED` atau `is_auto_amount=false` tidak diubah otomatis.
 - **Keanggotaan proyek** (`project_members`) wajib ada untuk peran non-ADMIN; `npm run db:seed:demo` sudah mengisinya, produksi harus dipastikan manual.
 - **Control-plane belum di-RLS** (`users`, `sessions`, `companies`, `memberships`, `invitations`, `auth_events`, katalog). Akses dijaga di aplikasi; pemisahan role DB direncanakan S2.
 - **Token undangan** belum dikirim email — admin menyalin tautan manual. Integrasi email/SSO menyusul.

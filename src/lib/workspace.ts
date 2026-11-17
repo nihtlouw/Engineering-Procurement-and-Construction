@@ -3,7 +3,7 @@ import { db } from "@/db";
 import {
   activityLogs, budgetLines, budgetVersions, changeOrders, clients, companySettings, contractTerms,
   costCategories, customerInvoices, customerPayments, documents, expenseLines, expenses, handoverItems,
-  notifications, opportunities, progressUpdates, projectMembers, projects, punchItems, purchaseRecords,
+  notifications, opportunities, poItems, progressUpdates, projectMembers, projects, punchItems, purchaseRecords,
   scheduleItems, sites, units, users, variationOrderLines, variationOrders,
 } from "@/db/schema";
 import { hasPermission, safeUser, signFileToken } from "@/lib/auth";
@@ -17,7 +17,7 @@ export async function getWorkspaceData(user: SessionUser): Promise<WorkspaceData
     allUsers, settingsRows, clientRows, siteRows, opportunityRows, projectRows, memberRows, categoryRows, unitRows,
     budgetRows, budgetLineRows, expenseRows, expenseLineRows, purchaseRows, invoiceRows, paymentRows, termRows,
     scheduleRows, progressRows, changeRows, punchRows, handoverRows, documentRows, activityRows, notificationRows,
-    variationRows, variationLineRows,
+    variationRows, variationLineRows, poItemRows,
   ] = await Promise.all([
     db.select().from(users), db.select().from(companySettings).limit(1), db.select().from(clients), db.select().from(sites),
     db.select().from(opportunities), db.select().from(projects), db.select().from(projectMembers), db.select().from(costCategories),
@@ -26,7 +26,7 @@ export async function getWorkspaceData(user: SessionUser): Promise<WorkspaceData
     db.select().from(contractTerms), db.select().from(scheduleItems), db.select().from(progressUpdates).orderBy(desc(progressUpdates.createdAt)),
     db.select().from(changeOrders), db.select().from(punchItems), db.select().from(handoverItems), db.select().from(documents).orderBy(desc(documents.createdAt)),
     db.select().from(activityLogs).orderBy(desc(activityLogs.createdAt)).limit(150), db.select().from(notifications).where(eq(notifications.userId, user.id)).orderBy(desc(notifications.createdAt)),
-    db.select().from(variationOrders), db.select().from(variationOrderLines),
+    db.select().from(variationOrders), db.select().from(variationOrderLines), db.select().from(poItems),
   ]);
   const safeUsers = allUsers.map(safeUser);
   const scopedIds = user.role === "ADMIN" ? projectRows.map((p) => p.id) : memberRows.filter((m) => m.userId === user.id).map((m) => m.projectId);
@@ -108,7 +108,12 @@ export async function getWorkspaceData(user: SessionUser): Promise<WorkspaceData
   const visiblePurchases = canPurchases ? purchaseRows.filter((p) => allowedIds.includes(p.projectId)).map((po) => {
     const bills = allExpensesWithLines.filter((e) => e.purchaseRecordId === po.id && e.approvalStatus === "APPROVED");
     const billedAmount = bills.reduce((sum, e) => sum.plus(e.lines.reduce((s, l) => s.plus(l.lineTotal), D(0))), D(0));
-    return { ...po, projectCode: projectRows.find((p) => p.id === po.projectId)?.code, billedAmount: money(billedAmount), remainingAmount: money(D(po.dppAmount).minus(billedAmount)) };
+    const items = poItemRows.filter((i) => i.purchaseRecordId === po.id).sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((i) => ({ ...i, budgetLineCode: budgetLineRows.find((b) => b.id === i.budgetLineId)?.code ?? null }));
+    return {
+      ...po, projectCode: projectRows.find((p) => p.id === po.projectId)?.code,
+      billedAmount: money(billedAmount), remainingAmount: money(D(po.dppAmount).minus(billedAmount)), items,
+    };
   }) : [];
   const visibleInvoices = canInvoices ? allInvoicesWithPayments.filter((i) => allowedIds.includes(i.projectId)).map((invoice) => ({
     ...invoice, projectCode: projectRows.find((p) => p.id === invoice.projectId)?.code, balance: money(invoiceBalance(invoice)), displayStatus: displayInvoiceStatus(invoice),

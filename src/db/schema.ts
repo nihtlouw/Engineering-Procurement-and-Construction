@@ -215,6 +215,10 @@ export const contractTerms = pgTable("contract_terms", {
   trigger: text("trigger"),
   targetDate: date("target_date"),
   sortOrder: integer("sort_order").notNull().default(0),
+  // S2b: kumulatif tagihan per termin (dijaga trigger DB, audit B5).
+  invoicedAmount: money("invoiced_amount"),
+  status: text("status").notNull().default("OPEN"),
+  isAutoAmount: boolean("is_auto_amount").notNull().default(true),
 });
 
 export const purchaseRecords = pgTable("purchase_records", {
@@ -231,6 +235,8 @@ export const purchaseRecords = pgTable("purchase_records", {
   orderDate: date("order_date"),
   expectedDate: date("expected_date"),
   budgetLineId: text("budget_line_id").references(() => budgetLines.id),
+  receivedAt: timestamp("received_at", { withTimezone: true }),
+  closedAt: timestamp("closed_at", { withTimezone: true }),
   createdById: text("created_by_id").notNull().references(() => users.id),
   createdAt: createdAt(),
 });
@@ -299,6 +305,7 @@ export const expenseLines = pgTable("expense_lines", {
   projectId: text("project_id").references(() => projects.id),
   costCategoryId: text("cost_category_id").notNull().references(() => costCategories.id),
   budgetLineId: text("budget_line_id").references(() => budgetLines.id),
+  poItemId: text("po_item_id").references(() => poItems.id),
   description: text("description").notNull(),
   quantity: quantity("quantity"),
   unitCode: text("unit_code").notNull(),
@@ -338,6 +345,7 @@ export const customerInvoices = pgTable("customer_invoices", {
   status: text("status").notNull().default("DRAFT"),
   sentAt: timestamp("sent_at", { withTimezone: true }),
   cancelReason: text("cancel_reason"),
+  overInvoiceReason: text("over_invoice_reason"),
   createdAt: createdAt(),
 });
 
@@ -401,6 +409,14 @@ export const changeOrders = pgTable("change_orders", {
   costImpact: money("cost_impact"),
   timeImpactDays: integer("time_impact_days").notNull().default(0),
   status: text("status").notNull().default("DRAFT"),
+  variationType: text("variation_type").notNull().default("ADD"),
+  clientReference: text("client_reference"),
+  clientApprovedAt: timestamp("client_approved_at", { withTimezone: true }),
+  clientApprovedBy: text("client_approved_by").references(() => users.id),
+  evidenceFileId: text("evidence_file_id").references(() => fileObjects.id),
+  cancelReason: text("cancel_reason"),
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  supersededByVariationId: text("superseded_by_variation_id"),
   createdById: text("created_by_id").notNull().references(() => users.id),
   createdAt: createdAt(),
 });
@@ -608,3 +624,22 @@ export const budgetPhasing = pgTable("budget_phasing", {
   plannedValue: money("planned_value"),
   createdAt: createdAt(),
 }, (table) => [uniqueIndex("budget_phasing_unique").on(table.budgetLineId, table.periodStart)]);
+
+
+/* -------------------------------------------------------------------------- */
+/* S2b · PO line items                                                        */
+/* -------------------------------------------------------------------------- */
+
+export const poItems = pgTable("po_items", {
+  id: id(),
+  companyId: uuid("company_id").notNull().default(sql`app_current_company_id()`),
+  purchaseRecordId: text("purchase_record_id").notNull().references(() => purchaseRecords.id, { onDelete: "cascade" }),
+  budgetLineId: text("budget_line_id").references(() => budgetLines.id),
+  description: text("description").notNull(),
+  quantity: quantity("quantity"),
+  unitCode: text("unit_code").notNull().default("Ls"),
+  unitAmount: money("unit_amount"),
+  dppAmount: money("dpp_amount"),
+  receivedQty: quantity("received_qty"),
+  sortOrder: integer("sort_order").notNull().default(0),
+}, (table) => [index("po_items_po_idx").on(table.purchaseRecordId, table.sortOrder)]);

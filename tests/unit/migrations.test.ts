@@ -4,7 +4,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { beforeAll, afterAll, describe, expect, it } from "vitest";
 
 /**
- * Uji SELURUH migrasi (0000 → 0001 → 0002) dari database kosong TANPA server
+ * Uji SELURUH migrasi (0000 → 0001 → 0002 → 0003) dari database kosong TANPA server
  * Postgres eksternal. PGlite = Postgres (WASM) in-process. Baseline di bawah
  * meniru skema 28 tabel pra-S1; bukan pengganti `npm run db:verify` pada DB nyata.
  */
@@ -96,11 +96,17 @@ INSERT INTO budget_versions (id,project_id,type,version_no,status,is_active_base
 INSERT INTO budget_lines (id,budget_version_id,cost_category_id,description,quantity,unit_code,unit_amount,total,contingency_pct,sort_order)
   VALUES ('bl-client','bv-client','cat-civ','Pekerjaan klien',2,'Ls',500,1000,10,0),
          ('bl-internal','bv-internal','cat-civ','Pekerjaan internal',1,'Ls',800,800,0,0);
+INSERT INTO purchase_records (id,project_id,supplier_name,status,summary,dpp_amount,total_amount,created_by_id)
+  VALUES ('po-1','p1','PT Vendor','RECEIVED','Pengadaan material',200,200,'u-admin');
+INSERT INTO contract_terms (id,project_id,type,name,amount,sort_order)
+  VALUES ('term-1','p1','PROGRESS','Termin 1',100,0);
+INSERT INTO customer_invoices (id,project_id,contract_term_id,number,type,total_amount,status,issue_date,due_date,dpp_amount,ppn_amount)
+  VALUES ('inv-1','p1','term-1','INV-001','PROGRESS',60,'SENT','2026-01-01','2026-02-01',60,0);
 `;
   await db.exec(ddl);
 
   const dir = path.resolve(process.cwd(), "drizzle");
-  for (const file of ["0000_tenant_foundation.sql", "0001_rls_policies.sql", "0002_s2a_budgeting_ptk.sql"]) {
+  for (const file of ["0000_tenant_foundation.sql", "0001_rls_policies.sql", "0002_s2a_budgeting_ptk.sql", "0003_s2b_po_terms_co.sql"]) {
     await db.exec(readFileSync(path.join(dir, file), "utf8"));
   }
   // PGlite default = superuser (BYPASSRLS). Neon/Supabase memakai role non-superuser.
@@ -115,12 +121,14 @@ afterAll(async () => { await db?.close(); });
 
 describe("migrasi S1 dari database pra-S1", () => {
   it("membuat company default dan mem-backfill data existing tanpa menghapusnya", async () => {
-    const company = await rows("SELECT id FROM companies WHERE slug='default'");
-    expect(company).toHaveLength(1);
+    const [company] = await rows("SELECT id FROM companies WHERE slug='default'");
+    await scope(String(company.id), "budget.internal.view,budget.client.view");
+    const companyRows = await rows("SELECT id FROM companies WHERE slug='default'");
+    expect(companyRows).toHaveLength(1);
     const client = await rows("SELECT company_id FROM clients WHERE id='c1'");
-    expect(client[0].company_id).toBe(company[0].id);
+    expect(client[0].company_id).toBe(companyRows[0].id);
     const project = await rows("SELECT company_id FROM projects WHERE id='p1'");
-    expect(project[0].company_id).toBe(company[0].id);
+    expect(project[0].company_id).toBe(companyRows[0].id);
   });
 
   it("membuat keanggotaan untuk user lama", async () => {
@@ -137,15 +145,15 @@ describe("migrasi S1 dari database pra-S1", () => {
 });
 
 describe("migrasi S2a", () => {
-  it("mengaktifkan ENABLE + FORCE RLS pada 27 tabel (24 lama + 3 baru)", async () => {
-    const list = [...TABLES, "variation_orders", "variation_order_lines", "budget_phasing"].map((t) => `'${t}'`).join(",");
+  it("mengaktifkan ENABLE + FORCE RLS pada 28 tabel bisnis", async () => {
+    const list = [...TABLES, "variation_orders", "variation_order_lines", "budget_phasing", "po_items"].map((t) => `'${t}'`).join(",");
     const r = await rows(`SELECT relname FROM pg_class WHERE relname = ANY(ARRAY[${list}]) AND relrowsecurity AND relforcerowsecurity`);
-    expect(r).toHaveLength(27);
+    expect(r).toHaveLength(28);
   });
 
-  it("membuat 110 policy (108 company isolation + 2 RESTRICTIVE internal)", async () => {
+  it("membuat 114 policy (112 company isolation + 2 RESTRICTIVE internal)", async () => {
     const r = await rows("SELECT count(*)::int AS n FROM pg_policy");
-    expect(r[0].n).toBe(110);
+    expect(r[0].n).toBe(114);
     const restrictive = await rows("SELECT count(*)::int AS n FROM pg_policy WHERE polpermissive = false");
     expect(restrictive[0].n).toBe(2);
   });
@@ -156,6 +164,8 @@ describe("migrasi S2a", () => {
   });
 
   it("backfill contract_value_current dari CO approved yang SUDAH ADA", async () => {
+    const [a] = await rows("SELECT id FROM companies WHERE slug='default'");
+    await scope(String(a.id), "budget.internal.view,budget.client.view");
     const r = await rows("SELECT contract_value, contract_value_current FROM projects WHERE id='p1'");
     expect(String(r[0].contract_value)).toBe("1000.00");
     expect(String(r[0].contract_value_current)).toBe("1100.00");
@@ -231,5 +241,76 @@ describe("migrasi S2a", () => {
     await expect(db.exec(`INSERT INTO clients (id,code,legal_name,display_name,industry,company_id) VALUES ('c3','C3','X','X','X','${other.id}');`)).rejects.toThrow();
     await scope("", "");
     expect(await rows("SELECT id FROM clients")).toHaveLength(0);
+  });
+});
+
+
+describe("migrasi S2b", () => {
+  const defaultScope = async (permissions = "budget.internal.view,budget.client.view") => {
+    const [a] = await rows("SELECT id FROM companies WHERE slug='default'");
+    await scope(String(a.id), permissions);
+    return String(a.id);
+  };
+
+  it("backfill PO lama menjadi satu pos dan termin dari invoice existing", async () => {
+    await defaultScope();
+    const po = await rows("SELECT id, dpp_amount, received_qty FROM po_items WHERE purchase_record_id='po-1'");
+    expect(po).toHaveLength(1);
+    expect(po[0].id).toBe("poi-po-1");
+    expect(String(po[0].dpp_amount)).toBe("200.00");
+    expect(String(po[0].received_qty)).toBe("1.0000");
+    const term = await rows("SELECT invoiced_amount, status FROM contract_terms WHERE id='term-1'");
+    expect(String(term[0].invoiced_amount)).toBe("60.00");
+    expect(term[0].status).toBe("PARTIALLY_INVOICED");
+  });
+
+  it("CHECK menolak qty diterima melebihi qty pesan", async () => {
+    await defaultScope();
+    await expect(db.exec("UPDATE po_items SET received_qty=2 WHERE id='poi-po-1';")).rejects.toThrow();
+  });
+
+  it("pagu termin menolak invoice kedua tanpa alasan + izin approve", async () => {
+    await defaultScope();
+    await expect(db.exec(`INSERT INTO customer_invoices
+      (id,project_id,contract_term_id,number,type,total_amount,status,issue_date,due_date,dpp_amount,ppn_amount)
+      VALUES ('inv-2','p1','term-1','INV-002','PROGRESS',50,'DRAFT','2026-02-01','2026-03-01',50,0);`)).rejects.toThrow();
+  });
+
+  it("over-invoice lolos hanya dengan alasan + invoice.approve, lalu status termin jadi INVOICED", async () => {
+    await defaultScope("budget.internal.view,budget.client.view,invoice.approve");
+    await db.exec(`INSERT INTO customer_invoices
+      (id,project_id,contract_term_id,number,type,total_amount,status,issue_date,due_date,dpp_amount,ppn_amount,over_invoice_reason)
+      VALUES ('inv-2','p1','term-1','INV-002','PROGRESS',50,'DRAFT','2026-02-01','2026-03-01',50,0,'Disetujui direksi');`);
+    const term = await rows("SELECT invoiced_amount, status FROM contract_terms WHERE id='term-1'");
+    expect(String(term[0].invoiced_amount)).toBe("110.00");
+    expect(term[0].status).toBe("INVOICED");
+  });
+
+  it("pagu nilai kontrak berlaku juga untuk invoice tanpa termin", async () => {
+    await defaultScope();
+    await expect(db.exec(`INSERT INTO customer_invoices
+      (id,project_id,contract_term_id,number,type,total_amount,status,issue_date,due_date,dpp_amount,ppn_amount)
+      VALUES ('inv-3','p1',NULL,'INV-003','OTHER',5000,'DRAFT','2026-03-01','2026-04-01',5000,0);`)).rejects.toThrow();
+  });
+
+  it("perubahan amount termin merekalkulasi status", async () => {
+    await defaultScope();
+    await db.exec("UPDATE contract_terms SET amount=200 WHERE id='term-1';");
+    const term = await rows("SELECT status FROM contract_terms WHERE id='term-1'");
+    expect(term[0].status).toBe("PARTIALLY_INVOICED");
+  });
+
+  it("trigger menolak baris tagihan PO lintas proyek", async () => {
+    await defaultScope();
+    await expect(db.exec(`INSERT INTO expense_lines
+      (id,expense_id,project_id,po_item_id,cost_category_id,description,quantity,unit_code,line_total,scope)
+      VALUES ('el-po','e-po','p-lain','poi-po-1','cat-civ','Salah proyek',1,'Ls',10,'PROJECT');`)).rejects.toThrow();
+  });
+
+  it("pos PO baru terisolasi per company", async () => {
+    const [other] = await rows("SELECT id FROM companies WHERE slug='other'");
+    await scope(String(other.id), "budget.internal.view,budget.client.view");
+    expect(await rows("SELECT id FROM po_items")).toHaveLength(0);
+    await scope("", "");
   });
 });
