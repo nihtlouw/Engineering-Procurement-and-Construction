@@ -2,9 +2,12 @@ import { NextResponse, type NextRequest } from "next/server";
 
 /**
  * Guard tepi (defense-in-depth). Ini BUKAN pengganti requireUser():
- * middleware berjalan di Edge tanpa akses DB, jadi hanya memeriksa keberadaan
- * cookie, Origin, dan Sec-Fetch-Site. Otorisasi sebenarnya tetap di handler
- * lewat requireUser() + assertPermission() + RLS.
+ * proxy berjalan sebelum route handler tanpa akses DB, jadi hanya memeriksa
+ * keberadaan cookie, Origin, dan Sec-Fetch-Site. Otorisasi sebenarnya tetap di
+ * handler lewat requireUser() + assertPermission() + RLS.
+ *
+ * Sejak Next.js 16.4 konvensi `middleware.ts` deprecated → `proxy.ts`
+ * (nama fungsi: `proxy`, bukan `middleware`).
  */
 const PUBLIC_PATHS = [
   "/api/auth/login",
@@ -13,7 +16,7 @@ const PUBLIC_PATHS = [
   "/api/health",
 ];
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
     return NextResponse.next();

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { PERMISSIONS, ROLES, ROLE_PERMISSIONS, type Permission } from "@/lib/domain";
+import { PERMISSIONS, ROLES, ROLE_PERMISSIONS, type Permission, type Role } from "@/lib/domain";
+import { assertExportAllowed, visibleBudgetTypes } from "@/lib/export-permissions";
 
 const has = (role: keyof typeof ROLE_PERMISSIONS, permission: Permission) =>
   ROLE_PERMISSIONS[role].includes(permission);
@@ -41,5 +42,35 @@ describe("matriks peran & permission", () => {
     expect(has("FIELD", "progress.create")).toBe(true);
     expect(has("FIELD", "expense.approve")).toBe(false);
     expect(has("FIELD", "gendoc.finalize")).toBe(false);
+  });
+});
+
+describe("hardening · ekspor tidak fail-open (SEC-05)", () => {
+  const perms = (role: Role) => [...ROLE_PERMISSIONS[role]];
+
+  it("menolak jenis ekspor yang tidak dikenal dengan 404", () => {
+    expect(() => assertExportAllowed({ permissions: perms("ADMIN") }, "payroll"))
+      .toThrowError(/tidak dikenal/);
+    try { assertExportAllowed({ permissions: perms("ADMIN") }, "payroll"); }
+    catch (e) { expect((e as { status?: number }).status).toBe(404); }
+  });
+
+  it("FIELD tanpa invoice.view mendapat 403 untuk ekspor invoice", () => {
+    expect(() => assertExportAllowed({ permissions: perms("FIELD") }, "invoices"))
+      .toThrowError(/invoice\.view/);
+    try { assertExportAllowed({ permissions: perms("FIELD") }, "invoices"); }
+    catch (e) { expect((e as { status?: number }).status).toBe(403); }
+  });
+
+  it("FIELD tetap boleh ekspor pengeluarannya sendiri", () => {
+    expect(visibleBudgetTypes({ permissions: perms("FIELD") })).toEqual([]);
+    expect(() => assertExportAllowed({ permissions: perms("FIELD") }, "expenses")).not.toThrow();
+  });
+
+  it("RAB internal hanya untuk pemegang budget.internal.view", () => {
+    expect(visibleBudgetTypes({ permissions: perms("CLIENT_VIEWER") })).toEqual(["CLIENT"]);
+    expect(visibleBudgetTypes({ permissions: perms("PROCUREMENT") })).toEqual(["CLIENT"]);
+    expect(visibleBudgetTypes({ permissions: perms("FINANCE") })).toEqual(["CLIENT", "INTERNAL"]);
+    expect(visibleBudgetTypes({ permissions: perms("ADMIN") })).toEqual(["CLIENT", "INTERNAL"]);
   });
 });

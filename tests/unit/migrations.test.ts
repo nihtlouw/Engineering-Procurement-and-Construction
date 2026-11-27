@@ -4,7 +4,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { beforeAll, afterAll, describe, expect, it } from "vitest";
 
 /**
- * Uji SELURUH migrasi (0000 → 0001 → 0002 → 0003 → 0004) dari database kosong TANPA server
+ * Uji SELURUH migrasi (0000 → 0005) dari database kosong TANPA server
  * Postgres eksternal. PGlite = Postgres (WASM) in-process. Baseline di bawah
  * meniru skema 28 tabel pra-S1; bukan pengganti `npm run db:verify` pada DB nyata.
  */
@@ -47,7 +47,8 @@ const EXTRA: Record<string, string> = {
   expense_settlements: `, expense_id text, payee_user_id text, amount numeric(18,2), paid_date date, method text`,
   customer_invoices: `, project_id text, contract_term_id text, number text, type text,
     total_amount numeric(18,2) not null default 0, status text not null default 'DRAFT',
-    issue_date date, due_date date, dpp_amount numeric(18,2), ppn_amount numeric(18,2)`,
+    issue_date date, due_date date, dpp_amount numeric(18,2), ppn_amount numeric(18,2),
+    created_at timestamptz not null default now()`,
   customer_payments: `, invoice_id text, cash_received_amount numeric(18,2), withholding_tax_amount numeric(18,2), method text`,
   schedule_items: `, project_id text, type text, name text, weight numeric(5,2) not null default 0,
     progress_pct numeric(5,2) not null default 0, status text, planned_end date, sort_order integer not null default 0`,
@@ -59,16 +60,25 @@ const EXTRA: Record<string, string> = {
   documents: `, project_id text, template_code text, status text, created_at timestamptz not null default now()`,
   activity_logs: `, object_type text, object_id text, action text, actor_id text, changes jsonb,
     reason text, project_id text, created_at timestamptz not null default now()`,
-  notifications: `, user_id text, created_at timestamptz not null default now()`,
+  notifications: `, user_id text, type text, title text, body text, link text,
+    read_at timestamptz, created_at timestamptz not null default now()`,
   company_settings: `, legal_name text, display_name text, default_ppn_rate numeric(5,2) not null default 11,
     allow_split_expense boolean not null default false`,
 };
 
 let db: PGlite;
 const rows = async (sql: string) => (await db.query(sql)).rows as Record<string, unknown>[];
-const scope = async (companyId: string, permissions = "") => {
+/** Company 'default' + scope penuh (dipakai banyak describe block). */
+const defaultScope = async (permissions = "budget.internal.view,budget.client.view,document.view,invoice.view,invoice.edit,invoice.approve") => {
+  const [a] = await rows("SELECT id FROM companies WHERE slug='default'");
+  await scope(String(a.id), permissions);
+  return String(a.id);
+};
+const scope = async (companyId: string, permissions = "", userId = "") => {
   await db.exec(`SELECT set_config('app.current_company_id', '${companyId}', false);`);
   await db.exec(`SELECT set_config('app.current_permissions', '${permissions}', false);`);
+  // 0005: policy RESTRICTIVE notifikasi memakai GUC user.
+  await db.exec(`SELECT set_config('app.current_user_id', '${userId}', false);`);
 };
 
 beforeAll(async () => {
@@ -106,7 +116,7 @@ INSERT INTO customer_invoices (id,project_id,contract_term_id,number,type,total_
   await db.exec(ddl);
 
   const dir = path.resolve(process.cwd(), "drizzle");
-  for (const file of ["0000_tenant_foundation.sql", "0001_rls_policies.sql", "0002_s2a_budgeting_ptk.sql", "0003_s2b_po_terms_co.sql", "0004_s3_field_photos.sql"]) {
+  for (const file of ["0000_tenant_foundation.sql", "0001_rls_policies.sql", "0002_s2a_budgeting_ptk.sql", "0003_s2b_po_terms_co.sql", "0004_s3_field_photos.sql", "0005_hardening_invoice_notifications.sql"]) {
     await db.exec(readFileSync(path.join(dir, file), "utf8"));
   }
   // PGlite default = superuser (BYPASSRLS). Neon/Supabase memakai role non-superuser.
@@ -151,11 +161,12 @@ describe("migrasi S2a", () => {
     expect(r).toHaveLength(30);
   });
 
-  it("membuat 122 policy (120 company isolation + 2 RESTRICTIVE internal)", async () => {
+  it("membuat 124 policy (120 company isolation + 4 RESTRICTIVE)", async () => {
+    // 0002: 2 RESTRICTIVE RAB internal · 0005: 2 RESTRICTIVE notifikasi per user.
     const r = await rows("SELECT count(*)::int AS n FROM pg_policy");
-    expect(r[0].n).toBe(122);
+    expect(r[0].n).toBe(124);
     const restrictive = await rows("SELECT count(*)::int AS n FROM pg_policy WHERE polpermissive = false");
-    expect(restrictive[0].n).toBe(2);
+    expect(restrictive[0].n).toBe(4);
   });
 
   it("membuat tabel PTK, baris PTK, dan phasing RAB", async () => {
@@ -389,5 +400,50 @@ describe("migrasi S3 field photos", () => {
     expect(await rows("SELECT id FROM field_photos")).toHaveLength(0);
     expect(await rows("SELECT id FROM document_photo_links")).toHaveLength(0);
     await scope(defaultCompany, "budget.internal.view,budget.client.view,document.view");
+  });
+});
+
+describe("migrasi 0005 hardening", () => {
+  it("customer_invoices punya created_by_id dan backfill dari activity_logs", async () => {
+    const defaultCompany = await defaultScope("invoice.view");
+    await db.exec(`INSERT INTO activity_logs (id,object_type,object_id,action,actor_id,created_at)
+      VALUES ('al-inv','INVOICE','inv-1','CREATED','u-admin', now() - interval '2 day')`);
+    // Simulasi DB pra-0005: kolom sudah ada (migrasi dijalankan saat DDL), jadi
+    // uji backfill dilakukan dengan mengosongkan kolom lalu menjalankan ulang UPDATE.
+    await db.exec(`UPDATE customer_invoices SET created_by_id = NULL WHERE id='inv-1'`);
+    await db.exec(`UPDATE customer_invoices ci
+        SET created_by_id = src.actor_id
+        FROM (SELECT DISTINCT ON (object_id) object_id, actor_id FROM activity_logs
+               WHERE object_type='INVOICE' AND actor_id IS NOT NULL
+               ORDER BY object_id, CASE action WHEN 'CREATED' THEN 0 ELSE 1 END, created_at ASC) src
+       WHERE ci.id = src.object_id AND ci.created_by_id IS NULL`);
+    const [inv] = await rows("SELECT created_by_id FROM customer_invoices WHERE id='inv-1'");
+    expect(inv.created_by_id).toBe("u-admin");
+    const columns = await rows(`SELECT column_name FROM information_schema.columns
+      WHERE table_name='customer_invoices' AND column_name='created_by_id'`);
+    expect(columns).toHaveLength(1);
+  });
+
+  it("notifikasi hanya terbaca oleh pemiliknya (RESTRICTIVE user scope)", async () => {
+    const defaultCompany = await defaultScope("invoice.view");
+    await scope(defaultCompany, "", "u-admin");
+    await db.exec(`INSERT INTO users (id,role,email,name,title,password_hash)
+      VALUES ('u-field','FIELD','f@x.id','Field','Site Engineer','x') ON CONFLICT (id) DO NOTHING;
+      INSERT INTO notifications (id,user_id,type,title) VALUES
+        ('n-admin','u-admin','APPROVAL','Untuk admin'),
+        ('n-field','u-field','APPROVAL','Untuk field');`);
+    await scope(defaultCompany, "", "u-admin");
+    const mine = await rows("SELECT id FROM notifications ORDER BY id");
+    expect(mine.map((r) => r.id)).toEqual(["n-admin"]);
+    // Fail-closed: tanpa GUC user, tidak ada notifikasi yang terlihat.
+    await scope(defaultCompany, "", "");
+    expect(await rows("SELECT id FROM notifications")).toHaveLength(0);
+    // UPDATE notifikasi milik orang lain ditolak (0 baris terpengaruh).
+    await scope(defaultCompany, "", "u-admin");
+    await db.exec(`UPDATE notifications SET read_at = now() WHERE id='n-field'`);
+    await scope(defaultCompany, "", "u-field");
+    const [field] = await rows("SELECT read_at FROM notifications WHERE id='n-field'");
+    expect(field.read_at).toBeNull();
+    await scope(defaultCompany, "budget.internal.view,budget.client.view,document.view", "u-admin");
   });
 });

@@ -9,6 +9,7 @@ Migrasi SQL **berversi dan wajib** — `drizzle-kit push` hanya untuk percobaan 
 | `0002_s2a_budgeting_ptk.sql` | S2a: kolom turunan pos RAB, `projects.contract_value_current` (satu sumber nilai kontrak) + trigger, `variation_orders` / `variation_order_lines` / `budget_phasing`, trigger `budgetLineId` lintas proyek, katalog minimum, dan 2 policy **RESTRICTIVE** untuk RAB internal |
 | `0003_s2b_po_terms_co.sql` | S2b: `po_items` + RLS, backfill PO lama per company, `expense_lines.po_item_id`, `contract_terms.invoiced_amount/status/is_auto_amount`, `customer_invoices.over_invoice_reason`, kolom bukti/pembatalan CO lama, trigger kumulatif termin, pagu termin/kontrak, dan integritas company/project |
 | `0004_s3_field_photos.sql` | S3: `file_objects.content_base64` nullable + metadata storage, tabel `field_photos` / `document_photo_links`, composite company FK, trigger kesamaan proyek, dan `FORCE RLS` pada 2 tabel baru |
+| `0005_hardening_invoice_notifications.sql` | Hardening-1: `customer_invoices.created_by_id` (+ backfill dari `activity_logs`), `app_current_user_id()`, dan 2 policy **RESTRICTIVE** pada `notifications` (SELECT/UPDATE hanya milik `user_id` sesi) |
 
 ## Perintah
 
@@ -34,8 +35,9 @@ SELECT set_config('app.current_company_id', '<uuid>', true);  -- true = SET LOCA
 - `FORCE` diperlukan karena user DB yang menjalankan migrasi juga **pemilik tabel**; tanpa `FORCE`, owner melewati RLS.
 - Tanpa scope, `app_current_company_id()` = NULL → `SELECT` mengembalikan 0 baris dan `INSERT` gagal (`NOT NULL`). **Fail-closed.**
 - Jangan pernah memakai `SET` (session-level) pada koneksi pool: nilainya bisa terbawa ke request berikutnya.
+- 0005 menambah GUC ketiga: `app.current_user_id`, juga `SET LOCAL` di transaksi yang sama. Tanpa itu policy RESTRICTIVE `notifications` fail-closed (0 notifikasi).
 - S2a menambah GUC kedua: `app.current_permissions` (daftar izin dipisah koma), juga `SET LOCAL` di transaksi yang sama. Tanpa itu policy RESTRICTIVE RAB internal bersifat **fail-closed** (0 baris). S2b memakai GUC yang sama untuk `app_has_permission('invoice.approve')` pada trigger anti double-invoice; SQL manual tanpa GUC tidak dapat meloloskan over-invoice.
-- Setelah `0004`, total tabel bisnis ber-RLS = **30** dengan **122 policy** (120 isolasi + 2 RESTRICTIVE). Backfill `0003` berjalan per company di bawah FORCE RLS, lalu GUC di-reset agar koneksi migrasi tidak mewarisi scope. Foto baru S3 tidak memakai `content_base64`; file lama/PDF final tetap provider `DB`.
+- Setelah `0005`, total tabel bisnis ber-RLS = **30** dengan **124 policy** (120 isolasi + 2 RESTRICTIVE RAB internal + 2 RESTRICTIVE notifikasi). Backfill `0003` berjalan per company di bawah FORCE RLS, lalu GUC di-reset agar koneksi migrasi tidak mewarisi scope. Foto baru S3 tidak memakai `content_base64`; file lama/PDF final tetap provider `DB`.
 
 ## Yang sengaja TIDAK di-RLS (S1)
 

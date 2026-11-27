@@ -11,7 +11,30 @@ import { D, money } from "@/lib/format";
 import { newId, requireProject } from "@/lib/server-services";
 import { enforcePagu } from "@/modules/budgeting/service";
 import { lineTotal } from "@/modules/budgeting/pagu";
+import { evaluatePoCancelGuard } from "@/modules/procurement/types";
 import type { NormalizedPoItem, PoItemInput, ReceiveItemInput, TermLimitEvaluation } from "@/modules/procurement/types";
+
+/**
+ * Audit DOM-07 / temuan approval invoice: pemisahan tugas.
+ * Pembuat invoice tidak boleh menyetujui invoice-nya sendiri. ADMIN dikecualikan
+ * karena perannya memang menjadi *override* terakhir (pola yang sama dipakai
+ * `expenses`, `change orders`, dan `budgeting`).
+ */
+export function assertInvoiceSeparationOfDuty(input: {
+  action: string;
+  createdById: string;
+  actorId: string;
+  actorRole: string;
+}) {
+  if (input.action !== "APPROVE") return;
+  if (input.actorRole === "ADMIN") return;
+  if (input.createdById !== input.actorId) return;
+  throw new ApiError(
+    "SEPARATION_OF_DUTY",
+    "Pembuat invoice tidak dapat menyetujui invoice-nya sendiri. Minta persetujuan pengguna lain.",
+    403,
+  );
+}
 
 /* Semua fungsi berjalan DI DALAM withCompany(): `db` = transaksi berskope
  * company + permissions, jadi tidak ada transaksi bertingkat. */
@@ -103,6 +126,20 @@ export async function receivePurchase(user: SessionUser, poId: string, inputs: R
         new: [...targets].map(([id, qty]) => ({ id, receivedQty: qty.toFixed(4) })) }],
   });
   return { id: poId, status: next };
+}
+
+/**
+ * Audit DOM-08: PO yang sudah punya tagihan aktif tidak boleh dibatalkan.
+ * Dihitung di dalam transaksi request (scope company RLS sudah aktif) dan
+ * dipakai route `POST /api/purchases/[id]/action` untuk transisi `CANCELLED`.
+ */
+export async function assertPoCancellable(poId: string, from: string, to: string) {
+  if (to !== "CANCELLED") return;
+  const bills = await db.select({ id: expenses.id, status: expenses.approvalStatus })
+    .from(expenses).where(eq(expenses.purchaseRecordId, poId));
+  const active = bills.filter((b) => !["VOIDED", "REJECTED"].includes(b.status));
+  const verdict = evaluatePoCancelGuard({ status: from, targetStatus: to, activeBillCount: active.length });
+  if (!verdict.allowed) throw new ApiError(verdict.code, verdict.message, verdict.status);
 }
 
 export async function enforcePoBillItems(

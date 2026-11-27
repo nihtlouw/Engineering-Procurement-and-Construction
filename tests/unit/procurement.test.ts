@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { evaluateTermLimit } from "@/modules/procurement/service";
-import { PO_TRANSITIONS, TERM_STATUSES } from "@/modules/procurement/types";
+import { assertInvoiceSeparationOfDuty, evaluateTermLimit } from "@/modules/procurement/service";
+import { evaluatePoCancelGuard, PO_TRANSITIONS, TERM_STATUSES } from "@/modules/procurement/types";
 import {
   coActionSchema, coItemSchema, createPoItemsSchema, poItemInputSchema, receivePoSchema,
 } from "@/modules/procurement/validation";
@@ -76,5 +76,36 @@ describe("S2b · validasi DTO", () => {
     expect(coItemSchema.safeParse({ ...base, variationType: "OMIT", priceImpact: "10" }).success).toBe(false);
     expect(coItemSchema.safeParse({ ...base, variationType: "OMIT", priceImpact: "-10" }).success).toBe(true);
     expect(coActionSchema.safeParse({ action: "CANCEL", reason: "Dibatalkan klien" }).success).toBe(true);
+  });
+});
+
+describe("hardening · guard PO & pemisahan tugas invoice", () => {
+  it("PO dengan tagihan aktif tidak boleh dibatalkan", () => {
+    const verdict = evaluatePoCancelGuard({ status: "ORDERED", targetStatus: "CANCELLED", activeBillCount: 2 });
+    expect(verdict.allowed).toBe(false);
+    if (!verdict.allowed) {
+      expect(verdict.code).toBe("PO_HAS_BILLS");
+      expect(verdict.status).toBe(409);
+      expect(verdict.message).toContain("2 tagihan PO");
+    }
+  });
+
+  it("PO tanpa tagihan tetap bisa dibatalkan, transisi lain tidak terpengaruh", () => {
+    expect(evaluatePoCancelGuard({ status: "ORDERED", targetStatus: "CANCELLED", activeBillCount: 0 }))
+      .toEqual({ allowed: true });
+    expect(evaluatePoCancelGuard({ status: "ORDERED", targetStatus: "RECEIVED", activeBillCount: 3 }))
+      .toEqual({ allowed: true });
+  });
+
+  it("pembuat invoice tidak boleh menyetujui sendiri; ADMIN override", () => {
+    expect(() => assertInvoiceSeparationOfDuty({ action: "APPROVE", createdById: "u1", actorId: "u1", actorRole: "FINANCE" }))
+      .toThrowError(/tidak dapat menyetujui/);
+    expect(() => assertInvoiceSeparationOfDuty({ action: "APPROVE", createdById: "u1", actorId: "u2", actorRole: "FINANCE" }))
+      .not.toThrow();
+    expect(() => assertInvoiceSeparationOfDuty({ action: "APPROVE", createdById: "u1", actorId: "u1", actorRole: "ADMIN" }))
+      .not.toThrow();
+    // Aksi non-approve (SEND/CANCEL) tidak terpengaruh aturan ini.
+    expect(() => assertInvoiceSeparationOfDuty({ action: "SEND", createdById: "u1", actorId: "u1", actorRole: "FINANCE" }))
+      .not.toThrow();
   });
 });
