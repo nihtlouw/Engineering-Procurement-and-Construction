@@ -4,7 +4,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { beforeAll, afterAll, describe, expect, it } from "vitest";
 
 /**
- * Uji SELURUH migrasi (0000 → 0008) dari database kosong TANPA server
+ * Uji SELURUH migrasi (0000 → 0009) dari database kosong TANPA server
  * Postgres eksternal. PGlite = Postgres (WASM) in-process. Baseline di bawah
  * meniru skema 28 tabel pra-S1; bukan pengganti `npm run db:verify` pada DB nyata.
  */
@@ -53,7 +53,8 @@ const EXTRA: Record<string, string> = {
     created_at timestamptz not null default now()`,
   customer_payments: `, invoice_id text, cash_received_amount numeric(18,2), withholding_tax_amount numeric(18,2), method text`,
   schedule_items: `, project_id text, type text, name text, weight numeric(5,2) not null default 0,
-    progress_pct numeric(5,2) not null default 0, status text, planned_end date, sort_order integer not null default 0`,
+    progress_pct numeric(5,2) not null default 0, status text, planned_end date, sort_order integer not null default 0,
+    parent_id text`,
   progress_updates: `, schedule_item_id text, project_id text, report_date date, created_at timestamptz not null default now(), created_by_id text`,
   change_orders: `, project_id text, code text, title text, reason text, scope_description text,
     status text not null default 'DRAFT', price_impact numeric(18,2) not null default 0,
@@ -112,6 +113,8 @@ INSERT INTO budget_lines (id,budget_version_id,cost_category_id,description,quan
          ('bl-internal','bv-internal','cat-civ','Pekerjaan internal',1,'Ls',800,800,0,0);
 INSERT INTO purchase_records (id,project_id,supplier_name,status,summary,dpp_amount,total_amount,created_by_id)
   VALUES ('po-1','p1','PT Vendor','RECEIVED','Pengadaan material',200,200,'u-admin');
+INSERT INTO schedule_items (id,project_id,type,name,weight,progress_pct,status,sort_order)
+  VALUES ('sch-old','p1','ACTIVITY','Item jadwal lama',100,0,'NOT_STARTED',0);
 INSERT INTO contract_terms (id,project_id,type,name,amount,sort_order)
   VALUES ('term-1','p1','PROGRESS','Termin 1',100,0);
 INSERT INTO customer_invoices (id,project_id,contract_term_id,number,type,total_amount,status,issue_date,due_date,dpp_amount,ppn_amount)
@@ -120,7 +123,7 @@ INSERT INTO customer_invoices (id,project_id,contract_term_id,number,type,total_
   await db.exec(ddl);
 
   const dir = path.resolve(process.cwd(), "drizzle");
-  for (const file of ["0000_tenant_foundation.sql", "0001_rls_policies.sql", "0002_s2a_budgeting_ptk.sql", "0003_s2b_po_terms_co.sql", "0004_s3_field_photos.sql", "0005_hardening_invoice_notifications.sql", "0006_master_data_codes.sql", "0007_terms_catalog.sql", "0008_document_templates.sql"]) {
+  for (const file of ["0000_tenant_foundation.sql", "0001_rls_policies.sql", "0002_s2a_budgeting_ptk.sql", "0003_s2b_po_terms_co.sql", "0004_s3_field_photos.sql", "0005_hardening_invoice_notifications.sql", "0006_master_data_codes.sql", "0007_terms_catalog.sql", "0008_document_templates.sql", "0009_wbs_scurve.sql"]) {
     await db.exec(readFileSync(path.join(dir, file), "utf8"));
   }
   // PGlite default = superuser (BYPASSRLS). Neon/Supabase memakai role non-superuser.
@@ -168,8 +171,9 @@ describe("migrasi S2a", () => {
   it("membuat 124 policy (120 company isolation + 4 RESTRICTIVE)", async () => {
     // 0002: 2 RESTRICTIVE RAB internal · 0005: 2 RESTRICTIVE notifikasi per user.
     // 0008 menambah 8 policy company isolation (versi template + variabel template).
+    // 0009 menambah 4 policy company isolation untuk kalender WBS.
     const r = await rows("SELECT count(*)::int AS n FROM pg_policy");
-    expect(r[0].n).toBe(132);
+    expect(r[0].n).toBe(136);
     const restrictive = await rows("SELECT count(*)::int AS n FROM pg_policy WHERE polpermissive = false");
     expect(restrictive[0].n).toBe(4);
   });
@@ -491,7 +495,9 @@ describe("migrasi 0007 · termin kontrak & katalog per company", () => {
     const defaultCompany = await defaultScope();
     await scope(defaultCompany, "invoice.edit");
     // term-1 sudah menempati sort_order 0 pada p1.
-    await expect(db.exec(`INSERT INTO contract_terms (id,project_id,type,name,amount,sort_order)
+    await expect(db.exec(`INSERT INTO schedule_items (id,project_id,type,name,weight,progress_pct,status,sort_order)
+  VALUES ('sch-old','p1','ACTIVITY','Item jadwal lama',100,0,'NOT_STARTED',0);
+INSERT INTO contract_terms (id,project_id,type,name,amount,sort_order)
       VALUES ('term-dup','p1','DP','Duplikat',10,0)`)).rejects.toThrow();
 
     await db.exec("INSERT INTO clients (id,code,legal_name,display_name,industry) VALUES ('c7','C7','PT Tujuh','Tujuh','Retail');");
@@ -626,6 +632,87 @@ describe("migrasi 0008 · template dokumen di DB", () => {
     expect(columns.map((r) => r.column_name)).toEqual([
       "archive_reason", "archived_at", "docx_file_id", "template_id", "template_snapshot",
     ]);
+    await scope(await defaultScope(), "budget.internal.view,budget.client.view,document.view");
+  });
+});
+
+describe("migrasi 0009 · WBS & kurva-S", () => {
+  it("item lama (pra-0009) ter-backfill level 1, kode WBS, dan distribusi rencana 100%", async () => {
+    const company = await defaultScope();
+    await scope(company, "schedule.edit");
+    // `sch-old` di-seed SEBELUM migrasi: hanya baris yang ada saat migrasi
+    // berjalan yang di-backfill (baris baru wajib mengirim kode/level sendiri).
+    const [backfilled] = await rows(`SELECT level, code, is_summary, planned_pct_per_period, committed_amount
+      FROM schedule_items WHERE id='sch-old'`);
+    expect(backfilled.code).toBe("WBS-001");
+    expect(Number(backfilled.level)).toBe(1);
+    expect(Number(backfilled.is_summary)).toBe(0);
+    expect(Number(backfilled.planned_pct_per_period)).toBe(100);
+    expect(Number(backfilled.committed_amount)).toBe(0);
+  });
+
+  it("kode WBS unik per proyek; proyek lain boleh memakai kode sama", async () => {
+    const company = await defaultScope();
+    await scope(company, "schedule.edit");
+    await db.exec(`INSERT INTO schedule_items (id,project_id,type,name,code,sort_order)
+      VALUES ('sch-new','p1','ACTIVITY','Item baru','WBS-010',8)`);
+    await expect(db.exec(`INSERT INTO schedule_items (id,project_id,type,name,code,sort_order)
+      VALUES ('sch-dup','p1','ACTIVITY','Duplikat','WBS-010',9)`)).rejects.toThrow();
+    await db.exec(`INSERT INTO clients (id,code,legal_name,display_name,industry) VALUES ('c9','C9','PT Sembilan','Sembilan','Retail');`);
+    await db.exec(`INSERT INTO projects (id,code,title,client_id,stage,contract_value) VALUES ('p9','PRJ-9','Proyek Sembilan','c9','IN_PROGRESS',1000);`);
+    await db.exec(`INSERT INTO schedule_items (id,project_id,type,name,code,sort_order) VALUES ('sch-9','p9','ACTIVITY','Pondasi lain','WBS-001',0)`);
+    const [row] = await rows("SELECT code FROM schedule_items WHERE id='sch-9'");
+    expect(row.code).toBe("WBS-001");
+  });
+
+  it("CHECK bobot/progres/level menolak nilai di luar rentang", async () => {
+    const company = await defaultScope();
+    await scope(company, "schedule.edit");
+    await expect(db.exec(`INSERT INTO schedule_items (id,project_id,type,name,weight,sort_order)
+      VALUES ('sch-bad-weight','p1','ACTIVITY','Salah',120,5)`)).rejects.toThrow();
+    await expect(db.exec(`INSERT INTO schedule_items (id,project_id,type,name,progress_pct,sort_order)
+      VALUES ('sch-bad-progress','p1','ACTIVITY','Salah',140,6)`)).rejects.toThrow();
+    await expect(db.exec(`INSERT INTO schedule_items (id,project_id,type,name,level,sort_order)
+      VALUES ('sch-bad-level','p1','ACTIVITY','Salah',9,7)`)).rejects.toThrow();
+  });
+
+  it("kalender WBS: versi unik per proyek, status DRAFT/LOCKED, FORCE RLS", async () => {
+    const company = await defaultScope();
+    await scope(company, "schedule.edit");
+    await db.exec(`INSERT INTO project_wbs_calendars (id,project_id,version,status,total_weight,item_count,weighted_progress)
+      VALUES ('cal-1','p1',1,'LOCKED',100,2,30)`);
+    await expect(db.exec(`INSERT INTO project_wbs_calendars (id,project_id,version) VALUES ('cal-dup','p1',1)`)).rejects.toThrow();
+    await expect(db.exec(`INSERT INTO project_wbs_calendars (id,project_id,version,status) VALUES ('cal-bad','p1',2,'OPEN')`)).rejects.toThrow();
+    await expect(db.exec(`INSERT INTO project_wbs_calendars (id,project_id,version,total_weight) VALUES ('cal-bad2','p1',3,140)`)).rejects.toThrow();
+    const forced = await rows(`SELECT relname FROM pg_class WHERE relname='project_wbs_calendars' AND relforcerowsecurity`);
+    expect(forced).toHaveLength(1);
+    const policies = await rows(`SELECT count(*)::int AS n FROM pg_policy p JOIN pg_class c ON c.oid=p.polrelid
+      WHERE c.relname='project_wbs_calendars'`);
+    expect(Number(policies[0].n)).toBe(4);
+  });
+
+  it("kalender company lain tidak terlihat (RLS fail-closed)", async () => {
+    const company = await defaultScope();
+    await scope(company, "schedule.edit");
+    let [other] = await rows("SELECT id FROM companies WHERE slug='other'");
+    if (!other) {
+      await db.exec("INSERT INTO companies (slug,name,legal_name) VALUES ('other','Other','Other');");
+      [other] = await rows("SELECT id FROM companies WHERE slug='other'");
+    }
+    await db.exec(`INSERT INTO clients (id,code,legal_name,display_name,industry) VALUES ('c9b','C9B','PT Lain','Lain','Retail')`);
+    await db.exec(`INSERT INTO projects (id,code,title,client_id,stage,contract_value) VALUES ('p9b','PRJ-9B','Proyek Lain','c9b','IN_PROGRESS',1000)`);
+    await scope(String(other.id), "schedule.edit");
+    await db.exec(`INSERT INTO project_wbs_calendars (id,project_id,version) VALUES ('cal-other','p9b',1)`);
+    await scope(company, "schedule.edit");
+    const visible = await rows("SELECT id FROM project_wbs_calendars WHERE id='cal-other'");
+    expect(visible).toHaveLength(0);
+  });
+
+  it("FK RAB → WBS terpasang ketika data lama bersih", async () => {
+    const fks = await rows(`SELECT conname FROM pg_constraint
+      WHERE conname IN ('budget_lines_wbs_fk','budget_phasing_wbs_fk') ORDER BY conname`);
+    expect(fks.map((row) => row.conname)).toEqual(["budget_lines_wbs_fk", "budget_phasing_wbs_fk"]);
+    await expect(db.exec("UPDATE budget_lines SET wbs_item_id='tidak-ada' WHERE id='bl-client'")).rejects.toThrow();
     await scope(await defaultScope(), "budget.internal.view,budget.client.view,document.view");
   });
 });

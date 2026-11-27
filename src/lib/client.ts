@@ -218,3 +218,60 @@ export const actOnDocument = (id: string, action: "FINALIZE" | "REVISE" | "ARCHI
   api<{ id: string; status?: string; docNumber?: string; docxFileId?: string | null; fileId?: string }>(
     `/api/documents/${id}/action`, { method: "POST", body: JSON.stringify({ action, reason }) },
   );
+
+/* -------------------------------------------------------------------------- */
+/* Tahap 5 · WBS & kurva-S                                                    */
+/* -------------------------------------------------------------------------- */
+
+export type WbsItemView = {
+  id: string; parentId: string | null; level: number; type: string; name: string;
+  code: string | null; isSummary: boolean; weight: string; progressPct: string; status: string;
+  plannedStart: string | null; plannedEnd: string | null; actualStart: string | null; actualEnd: string | null;
+  ownerId: string | null; ownerName: string | null; sortOrder: number; committedAmount: string;
+};
+
+export type WbsCalendarView = {
+  id: string; version: number; status: string; totalWeight: string; itemCount: number;
+  weightedProgress: string; startDate: string | null; note: string | null; lockedAt: string | null;
+  lockedByName: string | null; createdByName: string | null; updatedAt: string;
+};
+
+export const fetchWbs = (projectId: string) =>
+  api<{ items: WbsItemView[]; calendars: WbsCalendarView[] }>(`/api/projects/${projectId}/wbs`);
+
+export type WbsItemPayload = {
+  id?: string | null; parentId?: string | null; type?: string; name: string;
+  code?: string | null; level?: number; weight: string; progressPct?: string;
+  plannedStart?: string | null; plannedEnd?: string | null; ownerId?: string | null;
+  isSummary?: boolean; notes?: string | null;
+};
+
+export const saveWbsRecord = (projectId: string, body: {
+  items: WbsItemPayload[]; startDate?: string; endDate?: string; allowIncomplete?: boolean; note?: string | null;
+}) => api<{ items: WbsItemView[]; weight: number; removed: number }>(
+  `/api/projects/${projectId}/wbs`, { method: "PUT", body: JSON.stringify(body) },
+);
+
+export const lockWbsCalendar = (projectId: string, reason: string) =>
+  api<{ id: string; status: string; version: number }>(`/api/projects/${projectId}/wbs/action`, {
+    method: "POST", body: JSON.stringify({ action: "LOCK", reason }),
+  });
+
+export const linkBudgetLineToWbs = (projectId: string, budgetLineId: string, wbsItemId: string | null) =>
+  api<{ id: string; wbsItemId: string | null }>(`/api/projects/${projectId}/wbs/action`, {
+    method: "POST", body: JSON.stringify({ action: "LINK_BUDGET_LINE", budgetLineId, wbsItemId }),
+  });
+
+export type SCurveCell = { periodStart: string; planned: number; actual: number | null; plannedIncrement: number };
+
+export type SCurveView = {
+  periods: SCurveCell[];
+  plannedTotal: number; actualTotal: number; deviation: number;
+  status: "AHEAD" | "ON_TRACK" | "BEHIND" | "NO_DATA";
+  warning: string | null;
+  projectCode: string; startDate: string; endDate: string;
+  summary: { totalWeight: number; activityWeight: number; activityCount: number; summaryCount: number; weightedProgress: number; warning: string | null };
+  calendar: { id: string; version: number; status: string; totalWeight: string; lockedAt: string | null } | null;
+};
+
+export const fetchSCurve = (projectId: string) => api<SCurveView>(`/api/projects/${projectId}/scurve`);
