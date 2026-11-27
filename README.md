@@ -100,6 +100,7 @@ Tiga temuan lama ditutup tanpa menunggu sprint fitur:
 | `npm test` | Vitest (unit + eksekusi seluruh migrasi SQL di PGlite; integrasi RLS opsional) |
 | `npm run db:migrate` | Terapkan migrasi berversi |
 | `npm run db:migrate -- --check` | Daftar migrasi tertunda |
+| `npm run db:hash-password` | Buat hash `password_hash` (+ blok SQL siap tempel) untuk table/SQL editor |
 | `npm run db:reset-password` | Reset password akun lewat CLI (jalur darurat; audit + cabut sesi) |
 | `npm run db:verify` | Uji isolasi RLS + audit append-only |
 | `npm run db:seed:demo` | Seed demo via CLI |
