@@ -50,6 +50,7 @@ function parseArgs(argv: string[]) {
 function main() {
   const { password, email, sql } = parseArgs(process.argv.slice(2));
   if (!password) {
+    console.error("Jalankan di TERMINAL (folder repo), bukan di SQL editor database.");
     console.error("Pemakaian: npm run db:hash-password -- --password '...' [--email <email>] [--sql]");
     console.error("Opsional: --email dipakai untuk mencetak pernyataan UPDATE yang siap ditempel.");
     process.exitCode = 1;
@@ -90,7 +91,9 @@ function main() {
   } else if (sql) {
     console.log("\nTambahkan --email <email> untuk sekalian mencetak perintah UPDATE + hapus sesi.");
   } else {
-    console.log("\nPetunjuk table editor Neon: buka tabel `users` → baris akun → kolom");
+    console.log("\nBaris di atas adalah perintah TERMINAL. Untuk Neon, pakai blok SQL yang dicetak");
+  console.log("dengan --email, atau tempel hash-nya langsung di table editor.");
+  console.log("\nPetunjuk table editor Neon: buka tabel `users` → baris akun → kolom");
     console.log("`password_hash` → Edit → tempel hash di atas (JANGAN diketik).");
     console.log("Setelah itu set `failed_login_count` = 0 dan `locked_until` = NULL pada baris yang sama.");
     console.log("Untuk satu perintah lengkap, ulangi dengan --email <email>.");
