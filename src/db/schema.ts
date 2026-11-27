@@ -459,6 +459,60 @@ export const handoverItems = pgTable("handover_items", {
   isDone: boolean("is_done").notNull().default(false),
 });
 
+export const documentTemplates = pgTable("document_templates", {
+  id: id(),
+  // NULL = template sistem yang boleh dipakai semua company (read-only di UI).
+  companyId: uuid("company_id").references(() => companies.id),
+  code: text("code").notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  category: text("category").notNull().default("OTHER"),
+  baseCode: text("base_code"),
+  version: integer("version").notNull().default(1),
+  kind: text("kind").notNull().default("BLOCKS"),
+  blocks: jsonb("blocks"),
+  docxFileId: text("docx_file_id").references(() => fileObjects.id),
+  signatureParties: jsonb("signature_parties"),
+  isActive: boolean("is_active").notNull().default(true),
+  isSystem: boolean("is_system").notNull().default(false),
+  createdById: text("created_by_id").references(() => users.id),
+  updatedById: text("updated_by_id").references(() => users.id),
+  createdAt: createdAt(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("document_templates_company_code_idx").on(table.companyId, table.code).where(sql`company_id IS NOT NULL`),
+  uniqueIndex("document_templates_system_code_idx").on(table.code).where(sql`company_id IS NULL`),
+  index("document_templates_company_active_idx").on(table.companyId, table.isActive, table.code),
+]);
+
+export const documentTemplateVariables = pgTable("document_template_variables", {
+  id: id(),
+  companyId: uuid("company_id").notNull().default(sql`app_current_company_id()`),
+  templateId: text("template_id").notNull().references(() => documentTemplates.id, { onDelete: "cascade" }),
+  tag: text("tag").notNull(),
+  label: text("label").notNull(),
+  varType: text("var_type").notNull().default("TEXT"),
+  source: text("source").notNull(),
+  sampleValue: text("sample_value"),
+  isRequired: boolean("is_required").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: createdAt(),
+});
+
+export const documentTemplateVersions = pgTable("document_template_versions", {
+  id: id(),
+  companyId: uuid("company_id").notNull().default(sql`app_current_company_id()`),
+  templateId: text("template_id").notNull().references(() => documentTemplates.id, { onDelete: "cascade" }),
+  version: integer("version").notNull(),
+  name: text("name").notNull(),
+  blocks: jsonb("blocks"),
+  docxFileId: text("docx_file_id").references(() => fileObjects.id),
+  variables: jsonb("variables"),
+  note: text("note"),
+  createdById: text("created_by_id").references(() => users.id),
+  createdAt: createdAt(),
+});
+
 export const documents = pgTable("documents", {
   id: id(),
   companyId: uuid("company_id").notNull().default(sql`app_current_company_id()`),
@@ -469,17 +523,28 @@ export const documents = pgTable("documents", {
   title: text("title").notNull(),
   versionNo: integer("version_no").notNull().default(1),
   revisionNo: integer("revision_no").notNull().default(0),
-  templateCode: text("template_code").notNull(),
+  // S4: template bisa berasal dari DB; dokumen unggahan tidak punya template.
+  templateCode: text("template_code"),
+  templateId: text("template_id").references(() => documentTemplates.id),
+  templateName: text("template_name"),
   templateVersion: integer("template_version").notNull().default(1),
+  templateSnapshot: jsonb("template_snapshot"),
   mergeSnapshot: jsonb("merge_snapshot"),
   blocks: jsonb("blocks"),
   docNumber: text("doc_number").unique(),
   status: text("status").notNull().default("DRAFT"),
   fileId: text("file_id").references(() => fileObjects.id),
+  docxFileId: text("docx_file_id").references(() => fileObjects.id),
+  archivedAt: timestamp("archived_at", { withTimezone: true }),
+  archivedById: text("archived_by_id").references(() => users.id),
+  archiveReason: text("archive_reason"),
   uploadedById: text("uploaded_by_id").notNull().references(() => users.id),
   finalizedAt: timestamp("finalized_at", { withTimezone: true }),
   createdAt: createdAt(),
-});
+}, (table) => [
+  index("documents_template_idx").on(table.companyId, table.templateId),
+  index("documents_project_status_idx").on(table.companyId, table.projectId, table.status),
+]);
 
 export const activityLogs = pgTable("activity_logs", {
   id: id(),

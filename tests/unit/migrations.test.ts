@@ -4,7 +4,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { beforeAll, afterAll, describe, expect, it } from "vitest";
 
 /**
- * Uji SELURUH migrasi (0000 → 0007) dari database kosong TANPA server
+ * Uji SELURUH migrasi (0000 → 0008) dari database kosong TANPA server
  * Postgres eksternal. PGlite = Postgres (WASM) in-process. Baseline di bawah
  * meniru skema 28 tabel pra-S1; bukan pengganti `npm run db:verify` pada DB nyata.
  */
@@ -59,7 +59,9 @@ const EXTRA: Record<string, string> = {
     status text not null default 'DRAFT', price_impact numeric(18,2) not null default 0,
     cost_impact numeric(18,2) not null default 0, time_impact_days integer not null default 0,
     created_by_id text, created_at timestamptz not null default now()`,
-  documents: `, project_id text, template_code text, status text, created_at timestamptz not null default now()`,
+  documents: `, project_id text, template_code text, status text, created_at timestamptz not null default now(),
+    category text not null default 'OTHER', title text not null default 'Dokumen', related_type text, related_id text,
+    uploaded_by_id text`,
   activity_logs: `, object_type text, object_id text, action text, actor_id text, changes jsonb,
     reason text, project_id text, created_at timestamptz not null default now()`,
   notifications: `, user_id text, type text, title text, body text, link text,
@@ -118,7 +120,7 @@ INSERT INTO customer_invoices (id,project_id,contract_term_id,number,type,total_
   await db.exec(ddl);
 
   const dir = path.resolve(process.cwd(), "drizzle");
-  for (const file of ["0000_tenant_foundation.sql", "0001_rls_policies.sql", "0002_s2a_budgeting_ptk.sql", "0003_s2b_po_terms_co.sql", "0004_s3_field_photos.sql", "0005_hardening_invoice_notifications.sql", "0006_master_data_codes.sql", "0007_terms_catalog.sql"]) {
+  for (const file of ["0000_tenant_foundation.sql", "0001_rls_policies.sql", "0002_s2a_budgeting_ptk.sql", "0003_s2b_po_terms_co.sql", "0004_s3_field_photos.sql", "0005_hardening_invoice_notifications.sql", "0006_master_data_codes.sql", "0007_terms_catalog.sql", "0008_document_templates.sql"]) {
     await db.exec(readFileSync(path.join(dir, file), "utf8"));
   }
   // PGlite default = superuser (BYPASSRLS). Neon/Supabase memakai role non-superuser.
@@ -165,8 +167,9 @@ describe("migrasi S2a", () => {
 
   it("membuat 124 policy (120 company isolation + 4 RESTRICTIVE)", async () => {
     // 0002: 2 RESTRICTIVE RAB internal · 0005: 2 RESTRICTIVE notifikasi per user.
+    // 0008 menambah 8 policy company isolation (versi template + variabel template).
     const r = await rows("SELECT count(*)::int AS n FROM pg_policy");
-    expect(r[0].n).toBe(124);
+    expect(r[0].n).toBe(132);
     const restrictive = await rows("SELECT count(*)::int AS n FROM pg_policy WHERE polpermissive = false");
     expect(restrictive[0].n).toBe(4);
   });
@@ -551,6 +554,78 @@ describe("migrasi 0007 · termin kontrak & katalog per company", () => {
       WHERE table_schema='public' AND table_name='units'
         AND column_name IN ('created_by_id','created_at') ORDER BY column_name`);
     expect(columns.map((r) => r.column_name)).toEqual(["created_at", "created_by_id"]);
+    await scope(await defaultScope(), "budget.internal.view,budget.client.view,document.view");
+  });
+});
+
+describe("migrasi 0008 · template dokumen di DB", () => {
+  it("template sistem ter-seed 11 baris dengan company_id NULL", async () => {
+    const [row] = await rows("SELECT count(*)::int AS n FROM document_templates WHERE company_id IS NULL AND is_system");
+    expect(Number(row.n)).toBe(11);
+    const codes = await rows("SELECT code FROM document_templates WHERE company_id IS NULL ORDER BY code");
+    expect(codes.map((r) => r.code)).toContain("BAST1");
+    expect(codes.map((r) => r.code)).toContain("PROGRESS_REPORT");
+  });
+
+  it("kode template unik per company, tapi company lain boleh memakai kode sama", async () => {
+    const defaultCompany = await defaultScope();
+    await db.exec(`INSERT INTO document_templates (id,company_id,code,name,kind,is_system)
+      VALUES ('tpl-c1','${defaultCompany}','BAST1_CUSTOM','BAST Company','BLOCKS',false)`);
+    await expect(db.exec(`INSERT INTO document_templates (id,company_id,code,name,kind,is_system)
+      VALUES ('tpl-c1-dup','${defaultCompany}','BAST1_CUSTOM','Duplikat','BLOCKS',false)`)).rejects.toThrow();
+    let [other] = await rows("SELECT id FROM companies WHERE slug='other'");
+    if (!other) {
+      await db.exec("INSERT INTO companies (slug,name,legal_name) VALUES ('other','Other','Other');");
+      [other] = await rows("SELECT id FROM companies WHERE slug='other'");
+    }
+    await db.exec(`INSERT INTO document_templates (id,company_id,code,name,kind,is_system)
+      VALUES ('tpl-c2','${other.id}','BAST1_CUSTOM','BAST Company Lain','BLOCKS',false)`);
+    // Template sistem tidak boleh punya kode ganda.
+    await expect(db.exec(`INSERT INTO document_templates (id,company_id,code,name,kind,is_system)
+      VALUES ('tpl-dup-system',NULL,'BAST1','Duplikat sistem','BLOCKS',true)`)).rejects.toThrow();
+  });
+
+  it("jenis template dibatasi BLOCKS/DOCX dan tipe variabel dibatasi 5 nilai", async () => {
+    const company = await defaultScope();
+    await expect(db.exec(`INSERT INTO document_templates (id,company_id,code,name,kind)
+      VALUES ('tpl-bad','${company}','BAD_KIND','Salah','LIVEWORD')`)).rejects.toThrow();
+    await expect(db.exec(`INSERT INTO document_template_variables (id,company_id,template_id,tag,label,var_type,source)
+      VALUES ('var-bad','${company}','tpl-c1','x','X','BLOB','project.code')`)).rejects.toThrow();
+    await db.exec(`INSERT INTO document_template_variables (id,company_id,template_id,tag,label,var_type,source)
+      VALUES ('var-ok','${company}','tpl-c1','projectCode','Nomor proyek','TEXT','project.code')`);
+    const [variable] = await rows("SELECT tag FROM document_template_variables WHERE id='var-ok'");
+    expect(variable.tag).toBe("projectCode");
+  });
+
+  it("versi template unik per (template, version) dan documents.template_code boleh NULL", async () => {
+    const company = await defaultScope();
+    await db.exec(`INSERT INTO document_template_versions (id,company_id,template_id,version,name)
+      VALUES ('tv-1','${company}','tpl-c1',1,'v1')`);
+    await expect(db.exec(`INSERT INTO document_template_versions (id,company_id,template_id,version,name)
+      VALUES ('tv-2','${company}','tpl-c1',1,'duplikat')`)).rejects.toThrow();
+    await db.exec(`INSERT INTO documents (id,project_id,category,title,status,uploaded_by_id,created_at)
+      VALUES ('doc-upload','p1','OTHER','Scan kontrak','ACTIVE','u-admin',now())`);
+    const [doc] = await rows("SELECT template_code, status FROM documents WHERE id='doc-upload'");
+    expect(doc.template_code).toBeNull();
+  });
+
+  it("RLS penuh pada document_template_versions & variabel", async () => {
+    const policies = await rows(`SELECT count(*)::int AS n FROM pg_policy p JOIN pg_class c ON c.oid=p.polrelid
+      WHERE c.relname IN ('document_template_versions','document_template_variables')`);
+    expect(Number(policies[0].n)).toBe(8);
+    const forced = await rows(`SELECT relname FROM pg_class
+      WHERE relname IN ('document_template_versions','document_template_variables') AND relforcerowsecurity`);
+    expect(forced).toHaveLength(2);
+  });
+
+  it("kolom DOCX & arsip tersedia pada documents", async () => {
+    const columns = await rows(`SELECT column_name FROM information_schema.columns
+      WHERE table_schema='public' AND table_name='documents'
+        AND column_name IN ('template_id','template_snapshot','docx_file_id','archived_at','archive_reason')
+      ORDER BY column_name`);
+    expect(columns.map((r) => r.column_name)).toEqual([
+      "archive_reason", "archived_at", "docx_file_id", "template_id", "template_snapshot",
+    ]);
     await scope(await defaultScope(), "budget.internal.view,budget.client.view,document.view");
   });
 });

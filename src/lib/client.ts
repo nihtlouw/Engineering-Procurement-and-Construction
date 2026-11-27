@@ -1,7 +1,12 @@
 "use client";
 
 export async function api<T = Record<string, unknown>>(path: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(path, { ...options, headers: { "Content-Type": "application/json", ...options.headers } });
+  // FormData wajib dibiarkan tanpa Content-Type agar browser menulis boundary.
+  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
+  const response = await fetch(path, {
+    ...options,
+    headers: isFormData ? { ...options.headers } : { "Content-Type": "application/json", ...options.headers },
+  });
   const body = await response.json().catch(() => ({ message: "Respons server tidak valid." }));
   if (!response.ok) throw new Error(body.message || `Permintaan gagal (${response.status}).`);
   return body.data as T;
@@ -136,3 +141,80 @@ export const createUnitRecord = (body: Record<string, unknown>) =>
 
 export const updateUnitRecord = (id: string, body: Record<string, unknown>) =>
   api<{ id: string }>(`/api/catalog/units/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+
+/* -------------------------------------------------------------------------- */
+/* Tahap 4 · document generator (template di DB, DOCX, editor blok, arsip)    */
+/* -------------------------------------------------------------------------- */
+
+export type TemplateVariableView = {
+  id?: string; templateId?: string; tag: string; label: string;
+  varType: string; source: string; sampleValue?: string | null; isRequired: boolean; sortOrder?: number;
+};
+
+export type DocumentTemplateView = {
+  id: string; companyId: string | null; code: string; name: string; description: string | null;
+  category: string; baseCode: string | null; version: number; kind: string;
+  blocks: Record<string, unknown>[] | null; blockCount: number; docxFileId: string | null; hasDocx: boolean;
+  isActive: boolean; isSystem: boolean; shared: boolean; used: boolean;
+  variableCount: number; updatedAt: string;
+};
+
+export type TemplateCatalog = {
+  templates: DocumentTemplateView[];
+  variables: TemplateVariableView[];
+  defaults: TemplateVariableView[];
+};
+
+export const fetchTemplates = () => api<TemplateCatalog>("/api/templates");
+
+export type TemplatePayload = {
+  code: string; name: string; description?: string | null; category?: string;
+  kind: "BLOCKS" | "DOCX"; blocks?: Record<string, unknown>[]; docxFileId?: string | null;
+  signatureParties?: { label: string; name: string; title: string }[];
+  isActive?: boolean; variables?: TemplateVariableView[]; baseCode?: string | null;
+};
+
+export const createTemplateRecord = (body: TemplatePayload) =>
+  api<{ id: string; code: string; version: number }>("/api/templates", { method: "POST", body: JSON.stringify(body) });
+
+export const updateTemplateRecord = (id: string, body: TemplatePayload) =>
+  api<{ id: string; version: number; contentChanged: boolean }>(`/api/templates/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+
+export const duplicateTemplateRecord = (id: string, body: { code?: string; name?: string } = {}) =>
+  api<{ id: string; code: string }>(`/api/templates/${id}/action`, {
+    method: "POST", body: JSON.stringify({ action: "DUPLICATE", ...body }),
+  });
+
+export const deactivateTemplateRecord = (id: string, reason: string) =>
+  api<{ id: string; isActive: boolean }>(`/api/templates/${id}/action`, {
+    method: "POST", body: JSON.stringify({ action: "DEACTIVATE", reason }),
+  });
+
+export const fetchTemplateVersions = (id: string) =>
+  api<{ id: string; version: number; name: string; note: string | null; hasDocx: boolean; variableCount: number; createdAt: string }[]>(
+    `/api/templates/${id}/versions`,
+  );
+
+/** Upload .docx template (bukan gambar): tidak lewat kompresi klien. */
+export async function uploadTemplateDocx(file: File) {
+  const form = new FormData();
+  form.append("file", file);
+  return api<{ fileId: string; tags: string[]; sizeBytes: number }>("/api/templates/upload", {
+    method: "POST", body: form,
+  });
+}
+
+export const generateDocumentRecord = (body: {
+  projectId: string; templateId?: string; templateCode?: string;
+  relatedType?: string; relatedId?: string; title?: string;
+}) => api<{ id: string; blocks: Record<string, unknown>[]; unresolved: string[]; templateName: string | null }>(
+  "/api/documents", { method: "POST", body: JSON.stringify({ action: "CREATE", ...body }) },
+);
+
+export const updateDocumentBlocks = (id: string, body: { title?: string; blocks: Record<string, unknown>[] }) =>
+  api<{ id: string }>(`/api/documents/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+
+export const actOnDocument = (id: string, action: "FINALIZE" | "REVISE" | "ARCHIVE", reason?: string) =>
+  api<{ id: string; status?: string; docNumber?: string; docxFileId?: string | null; fileId?: string }>(
+    `/api/documents/${id}/action`, { method: "POST", body: JSON.stringify({ action, reason }) },
+  );

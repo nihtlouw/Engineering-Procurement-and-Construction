@@ -10,7 +10,7 @@ import { formatDate } from "@/lib/format";
 import { newId, requireProject } from "@/lib/server-services";
 import { filterFieldPhotos } from "@/modules/field-photos/filter";
 import { compressPhoto, validatePhotoBuffer } from "@/modules/field-photos/image";
-import { getFileUrl, putPhotoObject, removePhotoObject, STORAGE_URL_TTL_SECONDS, type StoredFile } from "@/modules/field-photos/storage";
+import { getFileUrl, putPhotoObject, removeObject, STORAGE_URL_TTL_SECONDS, type StoredFile } from "@/modules/field-photos/storage";
 import { PHOTO_CATEGORY_ORDER, type FieldPhotoFilter, type FieldPhotoUploadInput } from "@/modules/field-photos/validation";
 
 type FileRow = typeof fileObjects.$inferSelect;
@@ -112,7 +112,7 @@ export async function createFieldPhoto(
       });
     });
   } catch (error) {
-    await removePhotoObject(storageKey, stored.storageProvider, stored.storageBucket);
+    await removeObject(storageKey, stored.storageProvider, stored.storageBucket);
     throw error;
   }
   return {

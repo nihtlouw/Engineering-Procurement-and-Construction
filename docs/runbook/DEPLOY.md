@@ -147,7 +147,7 @@ Urutan: backup → `npm run db:migrate -- --check` → `npm run db:migrate` → 
 
 | # | Kriteria termin & katalog | Cara |
 |---|---|---|
-| 1 | Rangkaian 0000–0007 tereksekusi (30 tabel FORCE RLS, 124 policy, 6 index baru) | `npm test -- tests/unit/migrations.test.ts` (37 test) |
+| 1 | Rangkaian 0000–0007 tereksekusi (30 tabel FORCE RLS, 124 policy, 6 index baru) | `npm test -- tests/unit/migrations.test.ts` |
 | 2 | Urutan termin unik per proyek; proyek lain boleh memakai urutan sama | test migrasi 0007 |
 | 3 | Komposisi persen harus 100% (±0,01); campuran persen & nominal diizinkan | `npm test -- tests/unit/terms-catalog.test.ts` |
 | 4 | PM (tanpa `invoice.edit`) tetap bisa menyusun termin; FIELD tidak | UAT: login PM → tab Termin bisa disimpan; login FIELD → read-only |
@@ -160,6 +160,34 @@ Urutan: backup → `npm run db:migrate -- --check` → `npm run db:migrate` → 
 | 11 | Build/typecheck/lint/test/audit hijau | `npm run typecheck && npm run lint && npm test && npm audit --omit=dev --audit-level=high` |
 
 Rincian: [`docs/modules/TERMS-CATALOG.md`](../modules/TERMS-CATALOG.md).
+
+## Deploy Document Generator (`0008_document_templates.sql`)
+
+Migrasi **forward-only**, menambah 3 tabel template dan 6 kolom pada `documents`
+(`template_code` menjadi nullable). Backup dianjurkan (DDL pada tabel dokumen).
+
+Prasyarat baru: `docxtemplater` + `pizzip` (murni JS, ikut bundle serverless; tidak
+butuh Chromium/LibreOffice). Object storage (`FILE_STORAGE_DRIVER=s3`) sudah wajib
+sejak S3 — PDF dan DOCX hasil finalisasi ditulis ke sana, bukan ke database.
+
+Urutan: backup → `npm run db:migrate -- --check` → `npm run db:migrate` → `npm run db:verify` → deploy → smoke test tab **Dokumen → Template**.
+
+| # | Kriteria S4 | Cara |
+|---|---|---|
+| 1 | Rangkaian 0000–0008 tereksekusi (33 tabel FORCE RLS, 132 policy, 11 template sistem) | `npm test -- tests/unit/migrations.test.ts` (43 test) |
+| 2 | Template bisa diubah admin tanpa deploy | UAT: **Dokumen → Template → Duplikat & ubah** → ubah judul blok → generate dokumen baru memakai versi baru |
+| 3 | Dokumen lama tidak berubah saat template diubah | UAT: dokumen FINAL sebelum perubahan tetap sama; `template_snapshot` menyimpan salinan |
+| 4 | Upload `.docx` dengan `{projectCode}` terisi | UAT: unggah .docx → variabel terbaca → generate → finalisasi → unduh DOCX berisi nilai proyek |
+| 5 | PDF + DOCX tersimpan di object storage (bukan base64 DB) | setelah finalisasi: `select storage_provider, content_base64 from file_objects order by created_at desc limit 2` → provider S3/LOCAL, base64 NULL |
+| 6 | FINAL immutable; revisi membuat versi baru | UAT: edit blok ditolak pada FINAL (409 `DOCUMENT_LOCKED`), **Buat revisi** menghasilkan r+1 dan dokumen lama `SUPERSEDED` |
+| 7 | Arsip mencatat alasan, berkas tetap ada | UAT: **Arsipkan** → status `ARCHIVED`, `archive_reason` terisi, PDF/DOCX masih bisa diunduh |
+| 8 | Template sistem read-only; varian company terisolasi | UAT: company B tidak melihat template company A; ubah template sistem → 409 `SHARED_CATALOG_READONLY` |
+| 9 | Editor blok visual menggantikan JSON mentah | UAT: **Edit blok** → tambah tabel/tanda tangan → simpan → preview & PDF sesuai |
+| 10 | Dokumen unggahan tanpa template tetap valid | UAT: **Unggah** PDF/DOCX → muncul di papan dengan `template_code` kosong |
+| 11 | Hanya `template.manage` yang bisa mengunggah template | login PM → tombol template admin tidak muncul; API upload → 403 |
+| 12 | Build/typecheck/lint/test/audit hijau | `npm run typecheck && npm run lint && npm test && npm audit --omit=dev --audit-level=high` |
+
+Rincian: [`docs/modules/DOCUMENT-GENERATOR.md`](../modules/DOCUMENT-GENERATOR.md).
 
 ## Variabel environment
 
@@ -178,7 +206,7 @@ Rincian: [`docs/modules/TERMS-CATALOG.md`](../modules/TERMS-CATALOG.md).
 ## Catatan operasional & risiko sisa
 
 - **Koneksi pool + `SET LOCAL`**: `withCompany()` membungkus tiap request dalam transaksi. Jangan menambah query di luar `companyRoute()`/`withCompany()` — RLS akan menolaknya (fail-closed).
-- **`_migrations`** mencatat file yang sudah diterapkan; jangan mengedit file SQL yang sudah terpakai, buat file baru. `0002`, `0003`, `0004`, `0005`, `0006`, dan `0007` wajib dijalankan manual sebelum production karena Vercel tidak menjalankan migrasi dari runtime aplikasi.
+- **`_migrations`** mencatat file yang sudah diterapkan; jangan mengedit file SQL yang sudah terpakai, buat file baru. `0002`–`0008` wajib dijalankan manual sebelum production karena Vercel tidak menjalankan migrasi dari runtime aplikasi.
 - **S2a/S2b `app.current_permissions`**: script SQL manual yang tidak menyetel GUC ini akan melihat 0 baris RAB internal (fail-closed) dan tidak dapat meloloskan over-invoice (butuh `invoice.approve`).
 - **`app.current_user_id` (0005)**: script SQL manual yang tidak menyetel GUC ini akan melihat 0 baris `notifications` (fail-closed). `withCompany()` sudah menyetelnya otomatis untuk seluruh route aplikasi.
 - **Rekalkulasi termin** saat `IMPLEMENT` melewati termin yang sudah ditagihkan (tidak menurunkan nilai di bawah tagihan). S2b memakai `contract_terms.invoiced_amount` yang dijaga trigger sebagai sumber kumulatif; termin `INVOICED` / `CLOSED` atau `is_auto_amount=false` tidak diubah otomatis.

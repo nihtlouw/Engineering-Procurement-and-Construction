@@ -2,71 +2,59 @@ import { companyRoute } from "@/shared/auth/route";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import { activityLogs, budgetLines, budgetVersions, changeOrders, clients, companySettings, contractTerms, customerInvoices, documents, fileObjects, projects, scheduleItems, sites, users } from "@/db/schema";
-import { ApiError, assertPermission, errorResponse, requireUser } from "@/lib/auth";
-import { buildBlocks, DOCUMENT_TEMPLATES, PHOTO_MERGE_FIELD } from "@/lib/document-templates";
-import { calculateProjectMetrics, invoiceBalance } from "@/lib/finance";
-import { formatDate, formatIDR, terbilang } from "@/lib/format";
+import { activityLogs, documents, fileObjects } from "@/db/schema";
+import { ApiError, errorResponse, requireUser } from "@/lib/auth";
 import { newId, requireProject } from "@/lib/server-services";
-import { attachSelectedPhotosToDocument, getSelectedPhotoRefs } from "@/modules/field-photos/service";
+import { generateDocument, listProjectDocuments } from "@/modules/documents/service";
 
-const schema = z.object({ action: z.enum(["CREATE", "UPLOAD"]).default("CREATE"), projectId: z.string(), templateCode: z.string().optional(), relatedType: z.string().optional(), relatedId: z.string().optional(), title: z.string().optional(), category: z.string().optional(), fileId: z.string().optional() });
-const PHOTO_DOCUMENT_TEMPLATES = new Set([
-  "PROGRESS_REPORT", "BA_SURVEY", "BA_MOS", "BA_COMMISSIONING", "BAST1", "BAST2", "CHANGE_ORDER",
-]);
-async function POSTHandler(request: Request) {
+const schema = z.object({
+  action: z.enum(["CREATE", "UPLOAD"]).default("CREATE"),
+  projectId: z.string(),
+  /** Template dari DB (disarankan); `templateCode` dipertahankan untuk UI lama. */
+  templateId: z.string().optional(),
+  templateCode: z.string().optional(),
+  relatedType: z.string().optional(),
+  relatedId: z.string().optional(),
+  title: z.string().optional(),
+  category: z.string().optional(),
+  fileId: z.string().optional(),
+});
+
+async function GETHandler(request: Request) {
   try {
-    const user = await requireUser(); const body = schema.parse(await request.json()); await requireProject(user, body.projectId, body.action === "UPLOAD" ? "document.upload" : "gendoc.create");
-    if (body.action === "UPLOAD") {
-      if (!body.fileId || !body.title) throw new ApiError("INCOMPLETE_UPLOAD", "Judul dan file dokumen wajib diisi.", 422);
-      const [file] = await db.select().from(fileObjects).where(eq(fileObjects.id, body.fileId)).limit(1);
-      if (!file || file.uploadedById !== user.id) throw new ApiError("FILE_NOT_FOUND", "File tidak tersedia untuk akun ini.", 422);
-      const id = newId(); await db.insert(documents).values({ id, projectId: body.projectId, category: body.category || "OTHER", title: body.title, templateCode: "OTHER", status: "ACTIVE", fileId: body.fileId, uploadedById: user.id });
-      await db.insert(activityLogs).values({ id: newId(), actorId: user.id, objectType: "DOCUMENT", objectId: id, projectId: body.projectId, action: "UPLOADED", changes: [{ field: "fileId", old: null, new: body.fileId }] });
-      return Response.json({ data: { id } }, { status: 201 });
-    }
-    assertPermission(user, "gendoc.create");
-    if (!DOCUMENT_TEMPLATES.some((t) => t.code === body.templateCode)) throw new ApiError("UNKNOWN_TEMPLATE", "Template dokumen tidak dikenal.", 422);
-    const [project] = await db.select().from(projects).where(eq(projects.id, body.projectId)); const [client] = await db.select().from(clients).where(eq(clients.id, project.clientId));
-    const [site] = project.siteId ? await db.select().from(sites).where(eq(sites.id, project.siteId)) : []; const [company] = await db.select().from(companySettings).limit(1);
-    const pm = project.pmId ? (await db.select().from(users).where(eq(users.id, project.pmId)).limit(1))[0] : null;
-    const snapshot: Record<string, string> = { projectCode: project.code, projectTitle: project.title, clientLegalName: client.legalName, clientContact: client.contactName || "", siteName: site?.name || "", contractNumber: project.contractNumber || "", // Non-breaking space after "Rp" keeps the PDF text shaping from turning
-      // "Rp4.850.000.000" into "Rp-4.850.000.000".
-      contractValue: formatIDR(project.contractValue).replace(/^(Rp)\s*/, "$1 "), companyLegalName: company.legalName, pmName: pm?.name || user.name, documentDate: formatDate(new Date()) };
-    if (["INVOICE", "KWITANSI"].includes(body.templateCode!)) {
-      const [invoice] = await db.select().from(customerInvoices).where(eq(customerInvoices.id, body.relatedId || "")).limit(1);
-      if (!invoice || invoice.projectId !== project.id) throw new ApiError("INVOICE_REQUIRED", "Pilih invoice dari proyek yang sama.", 422);
-      Object.assign(snapshot, { invoiceNumber: invoice.number, invoiceType: invoice.type, invoiceIssueDate: formatDate(invoice.issueDate), invoiceDueDate: formatDate(invoice.dueDate), invoiceDpp: formatIDR(invoice.dppAmount), invoicePpn: formatIDR(invoice.ppnAmount), invoiceTotal: formatIDR(invoice.totalAmount), invoiceTotalInWords: terbilang(invoice.totalAmount) });
-    }
-    if (body.templateCode === "PROGRESS_REPORT") {
-      const items = await db.select().from(scheduleItems).where(eq(scheduleItems.projectId, project.id));
-      const metrics = calculateProjectMetrics({ project, expenses: [], purchases: [], invoices: [], budgets: [], schedule: items, canViewInternal: false });
-      snapshot.progressPct = String(metrics.progressPct); snapshot.scheduleRows = JSON.stringify(items.map((i) => ({ activity: i.name, plan: formatDate(i.plannedEnd), progress: `${i.progressPct}%`, status: i.status })));
-    }
-    if (body.templateCode === "RAB_CLIENT") {
-      const clientBudget = (await db.select().from(budgetVersions).where(eq(budgetVersions.projectId, project.id))).find((b) => b.type === "CLIENT" && b.isActiveBaseline);
-      const lines = clientBudget ? await db.select().from(budgetLines).where(eq(budgetLines.budgetVersionId, clientBudget.id)) : [];
-      snapshot.budgetRows = JSON.stringify(lines.map((l) => ({ code: l.code || "—", description: l.description, quantity: `${l.quantity} ${l.unitCode}`, amount: formatIDR(l.total) })));
-    }
-    if (body.templateCode === "CHANGE_ORDER") {
-      const [co] = await db.select().from(changeOrders).where(eq(changeOrders.id, body.relatedId || "")).limit(1);
-      if (!co || co.projectId !== project.id) throw new ApiError("CHANGE_ORDER_REQUIRED", "Pilih change order dari proyek yang sama.", 422);
-      Object.assign(snapshot, { changeOrderCode: co.code, scopeDescription: co.scopeDescription, reason: co.reason, priceImpact: formatIDR(co.priceImpact), timeImpactDays: String(co.timeImpactDays) });
-    }
-    // S3: hanya foto yang SUDAH dipilih saat generate yang menjadi snapshot dokumen.
-    const photoRefs = PHOTO_DOCUMENT_TEMPLATES.has(body.templateCode!)
-      ? await getSelectedPhotoRefs(project.id)
-      : [];
-    snapshot[PHOTO_MERGE_FIELD] = JSON.stringify(photoRefs);
-    const blocks = buildBlocks(body.templateCode!, snapshot); const id = newId();
-    const title = body.title || `${DOCUMENT_TEMPLATES.find((t) => t.code === body.templateCode)?.name} — ${project.code}`;
-    await db.transaction(async (tx) => {
-      await tx.insert(documents).values({ id, projectId: project.id, relatedType: body.relatedType, relatedId: body.relatedId, category: body.templateCode?.startsWith("BAST") ? "BA" : body.templateCode === "INVOICE" ? "OTHER" : "OTHER", title, templateCode: body.templateCode!, templateVersion: 1, mergeSnapshot: snapshot, blocks, status: "DRAFT", uploadedById: user.id });
-      await attachSelectedPhotosToDocument(user, id, photoRefs, tx);
-      await tx.insert(activityLogs).values({ id: newId(), actorId: user.id, objectType: "DOCUMENT", objectId: id, projectId: project.id, action: "GENERATED", changes: [{ field: "templateCode", old: null, new: body.templateCode }, { field: "mergeSnapshot", old: null, new: "SNAPSHOT_STORED" }, { field: "photoCount", old: null, new: photoRefs.length }] });
-    });
-    return Response.json({ data: { id, blocks, mergeSnapshot: snapshot, photoCount: photoRefs.length } }, { status: 201 });
+    const user = await requireUser();
+    const projectId = new URL(request.url).searchParams.get("projectId");
+    if (!projectId) throw new ApiError("PROJECT_REQUIRED", "Parameter projectId wajib diisi.", 422);
+    return Response.json({ data: await listProjectDocuments(user, projectId) });
   } catch (error) { return errorResponse(error); }
 }
 
+async function POSTHandler(request: Request) {
+  try {
+    const user = await requireUser();
+    const body = schema.parse(await request.json());
+    if (body.action === "UPLOAD") {
+      await requireProject(user, body.projectId, "document.upload");
+      if (!body.fileId || !body.title) throw new ApiError("INCOMPLETE_UPLOAD", "Judul dan file dokumen wajib diisi.", 422);
+      const [file] = await db.select().from(fileObjects).where(eq(fileObjects.id, body.fileId)).limit(1);
+      if (!file || file.uploadedById !== user.id) throw new ApiError("FILE_NOT_FOUND", "File tidak tersedia untuk akun ini.", 422);
+      const id = newId();
+      await db.insert(documents).values({
+        id, projectId: body.projectId, category: body.category || "OTHER", title: body.title,
+        templateCode: null, status: "ACTIVE", fileId: body.fileId, uploadedById: user.id,
+      });
+      await db.insert(activityLogs).values({
+        id: newId(), actorId: user.id, objectType: "DOCUMENT", objectId: id, projectId: body.projectId,
+        action: "UPLOADED", changes: [{ field: "fileId", old: null, new: body.fileId }],
+      });
+      return Response.json({ data: { id } }, { status: 201 });
+    }
+    if (!body.templateId && !body.templateCode) {
+      throw new ApiError("TEMPLATE_REQUIRED", "Pilih template dokumen.", 422);
+    }
+    return Response.json({ data: await generateDocument(user, body) }, { status: 201 });
+  } catch (error) { return errorResponse(error); }
+}
+
+export const GET = companyRoute(GETHandler);
 export const POST = companyRoute(POSTHandler);

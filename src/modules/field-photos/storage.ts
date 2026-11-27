@@ -84,9 +84,14 @@ function localFilePath(key: string) {
   return full;
 }
 
-export async function putPhotoObject(
+/**
+ * Menyimpan objek apa pun (foto, DOCX, PDF) ke LOCAL/S3. Semua berkas privat:
+ * `Cache-Control` pendek karena akses selalu lewat URL bertanda tangan.
+ */
+export async function putObject(
   buffer: Buffer,
   storageKey: string,
+  contentType = "application/octet-stream",
 ): Promise<{ storageProvider: "LOCAL" | "S3"; storageBucket: string | null }> {
   const config = getStorageConfig();
   if (config.driver === "local") {
@@ -100,14 +105,18 @@ export async function putPhotoObject(
     Bucket: config.bucket!,
     Key: storageKey,
     Body: buffer,
-    ContentType: "image/jpeg",
+    ContentType: contentType,
     CacheControl: "private, max-age=300",
   }));
   return { storageProvider: "S3", storageBucket: config.bucket ?? null };
 }
 
+export async function putPhotoObject(buffer: Buffer, storageKey: string) {
+  return putObject(buffer, storageKey, "image/jpeg");
+}
+
 /** Best-effort kompensasi bila insert DB gagal setelah object terunggah. */
-export async function removePhotoObject(
+export async function removeObject(
   storageKey: string,
   provider: "LOCAL" | "S3",
   bucket?: string | null,

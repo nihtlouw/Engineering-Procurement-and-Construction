@@ -11,6 +11,7 @@ Migrasi SQL **berversi dan wajib** — `drizzle-kit push` hanya untuk percobaan 
 | `0004_s3_field_photos.sql` | S3: `file_objects.content_base64` nullable + metadata storage, tabel `field_photos` / `document_photo_links`, composite company FK, trigger kesamaan proyek, dan `FORCE RLS` pada 2 tabel baru |
 | `0005_hardening_invoice_notifications.sql` | Hardening-1: `customer_invoices.created_by_id` (+ backfill dari `activity_logs`), `app_current_user_id()`, dan 2 policy **RESTRICTIVE** pada `notifications` (SELECT/UPDATE hanya milik `user_id` sesi) |
 | `0006_master_data_codes.sql` | Master data: UNIQUE global `clients/opportunities/projects.code` diganti UNIQUE `(company_id, code)`, index `sites_client_idx` |
+| `0008_document_templates.sql` | S4: `document_templates` (+`document_template_variables`, `document_template_versions` FORCE RLS), `documents.template_id/template_name/template_snapshot/docx_file_id/archived_*`, `template_code` nullable, seed 11 template sistem |
 | `0007_terms_catalog.sql` | Termin & katalog: `contract_terms.notes`, UNIQUE `(company_id, project_id, sort_order)`, index `(company_id, project_id, type)`, trigger status dipertahankan, UNIQUE global `cost_categories.code`/`units.code` diganti UNIQUE parsial `(company_id, code) WHERE company_id IS NOT NULL`, plus `created_by_id`/`created_at` |
 
 ## Perintah

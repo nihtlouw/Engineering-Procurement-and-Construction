@@ -1,21 +1,70 @@
 "use client";
-import { useEffect, useState } from "react";
-import { Download, FileCheck2, FilePlus2, FileText, Printer, RefreshCw, Upload } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Archive, Download, FileCheck2, FilePlus2, FileText, Printer, RefreshCw, Settings2, Upload } from "lucide-react";
 import type { AppData, DocumentBlockView, DocumentView } from "@/components/types";
-import { DOCUMENT_TEMPLATES } from "@/lib/document-templates";
 import { Badge, Button, EmptyState, Field, Input, Modal, SectionTitle, Select } from "@/components/ui";
-import { api, uploadFile } from "@/lib/client";
+import {
+  actOnDocument, fetchTemplates, generateDocumentRecord, updateDocumentBlocks, uploadFile,
+  type DocumentTemplateView,
+} from "@/lib/client";
+import BlockEditor, { type EditableBlock } from "@/components/documents/BlockEditor";
+import TemplateAdmin from "@/components/documents/TemplateAdmin";
 import { LABELS } from "@/lib/domain";
 import { formatDate, formatIDR } from "@/lib/format";
 
 type Notify = (message: string) => void;
 export function DocumentComposer({ data, open, onClose, onSaved, projectId }: { data: AppData; open: boolean; onClose: () => void; onSaved: Notify; projectId?: string }) {
-  const [project, setProject] = useState(projectId || data.projects[0]?.id || ""); const [template, setTemplate] = useState("BAST1"); const [relatedId, setRelatedId] = useState(""); const [saving, setSaving] = useState(false); const [error, setError] = useState("");
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- utang UI pra-S1; refactor ke derived state/key remount dijadwalkan S2
-  useEffect(() => { if (projectId) setProject(projectId); }, [projectId, open]);
-  const relatedType = ["INVOICE", "KWITANSI"].includes(template) ? "INVOICE" : template === "CHANGE_ORDER" ? "CHANGE_ORDER" : "PROJECT";
-  const save = async () => { setSaving(true); setError(""); try { await api("/api/documents", { method: "POST", body: JSON.stringify({ action: "CREATE", projectId: project, templateCode: template, relatedType, relatedId: relatedId || project }) }); onSaved("Dokumen dibuat sebagai DRAFT dengan snapshot data dan versi template."); onClose(); } catch (e) { setError(e instanceof Error ? e.message : "Dokumen gagal dibuat"); } finally { setSaving(false); } };
-  return <Modal open={open} onClose={onClose} title="Generate dokumen proyek" eyebrow="Template blok → snapshot → preview → PDF"><div className="space-y-4"><Field label="Proyek"><Select value={project} onChange={(e) => setProject(e.target.value)}>{data.projects.map((p) => <option key={p.id} value={p.id}>{p.code} · {p.title}</option>)}</Select></Field><Field label="Template dokumen"><Select value={template} onChange={(e) => { setTemplate(e.target.value); setRelatedId(""); }}>{DOCUMENT_TEMPLATES.map((t) => <option key={t.code} value={t.code}>{t.name}</option>)}</Select></Field><p className="-mt-2 rounded-[var(--radius-control)] bg-paper p-3 text-xs leading-relaxed text-muted">{DOCUMENT_TEMPLATES.find((t) => t.code === template)?.description}</p>{relatedType === "INVOICE" ? <Field label="Invoice sumber"><Select value={relatedId} onChange={(e) => setRelatedId(e.target.value)}><option value="">Pilih invoice</option>{data.invoices.filter((i) => i.projectId === project).map((i) => <option key={i.id} value={i.id}>{i.number} · {formatIDR(i.totalAmount)}</option>)}</Select></Field> : null}{relatedType === "CHANGE_ORDER" ? <Field label="Change order sumber"><Select value={relatedId} onChange={(e) => setRelatedId(e.target.value)}><option value="">Pilih change order</option>{data.changeOrders.filter((c) => c.projectId === project).map((c) => <option key={c.id} value={c.id}>{c.code} · {c.title}</option>)}</Select></Field> : null}{error ? <p className="text-xs text-danger">{error}</p> : null}<Button className="w-full" loading={saving} onClick={() => void save()}><FilePlus2 size={16} />Buat draft & snapshot</Button></div></Modal>;
+  const [project, setProject] = useState(projectId || data.projects[0]?.id || "");
+  const [templates, setTemplates] = useState<DocumentTemplateView[]>([]);
+  const [templateId, setTemplateId] = useState("");
+  const [relatedId, setRelatedId] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  // Template dimuat saat modal dibuka (bukan saat SSR): bisa berubah tanpa deploy.
+  const loadTemplates = useCallback(() => {
+    void fetchTemplates()
+      .then((catalog) => {
+        const active = catalog.templates.filter((template) => template.isActive);
+        setTemplates(active);
+        setTemplateId((current) => current || active[0]?.id || "");
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : "Gagal memuat template."));
+  }, []);
+  useEffect(() => { if (open) loadTemplates(); }, [loadTemplates, open]);
+  // Proyek dari workspace bersifat tetap; modal mandiri memilih sendiri.
+  const activeProject = projectId || project;
+
+  const template = templates.find((t) => t.id === templateId) ?? null;
+  const code = template?.code ?? "";
+  const relatedType = ["INVOICE", "KWITANSI"].includes(code) ? "INVOICE" : code === "CHANGE_ORDER" ? "CHANGE_ORDER" : "PROJECT";
+  const save = async () => {
+    setSaving(true); setError("");
+    try {
+      const result = await generateDocumentRecord({
+        projectId: activeProject, templateId, relatedType, relatedId: relatedId || undefined,
+      });
+      onSaved(`Dokumen ${result.templateName ?? code} dibuat sebagai DRAFT dengan snapshot + ${result.unresolved.length} tag belum terisi.`);
+      onClose();
+    } catch (e) { setError(e instanceof Error ? e.message : "Dokumen gagal dibuat"); } finally { setSaving(false); }
+  };
+
+  return <Modal open={open} onClose={onClose} title="Generate dokumen proyek" eyebrow="Template DB → snapshot → preview → PDF/DOCX">
+    <div className="space-y-4">
+      <Field label="Proyek"><Select value={activeProject} disabled={!!projectId} onChange={(e) => setProject(e.target.value)}>{data.projects.map((p) => <option key={p.id} value={p.id}>{p.code} · {p.title}</option>)}</Select></Field>
+      <Field label="Template dokumen" hint={template ? `${template.kind === "DOCX" ? "Berkas .docx" : `${template.blockCount} blok`} · v${template.version} · ${template.variableCount} variabel` : undefined}>
+        <Select value={templateId} onChange={(e) => { setTemplateId(e.target.value); setRelatedId(""); }}>
+          <option value="">Pilih template</option>
+          {templates.map((t) => <option key={t.id} value={t.id}>{t.code} · {t.name}</option>)}
+        </Select>
+      </Field>
+      <p className="-mt-2 rounded-[var(--radius-control)] bg-paper p-3 text-xs leading-relaxed text-muted">{template?.description || "Pilih template untuk melihat deskripsi."}</p>
+      {relatedType === "INVOICE" ? <Field label="Invoice sumber"><Select value={relatedId} onChange={(e) => setRelatedId(e.target.value)}><option value="">Pilih invoice</option>{data.invoices.filter((i) => i.projectId === activeProject).map((i) => <option key={i.id} value={i.id}>{i.number} · {formatIDR(i.totalAmount)}</option>)}</Select></Field> : null}
+      {relatedType === "CHANGE_ORDER" ? <Field label="Change order sumber"><Select value={relatedId} onChange={(e) => setRelatedId(e.target.value)}><option value="">Pilih change order</option>{data.changeOrders.filter((c) => c.projectId === activeProject).map((c) => <option key={c.id} value={c.id}>{c.code} · {c.title}</option>)}</Select></Field> : null}
+      {error ? <p className="text-xs text-danger">{error}</p> : null}
+      <Button className="w-full" loading={saving} disabled={!templateId} onClick={() => void save()}><FilePlus2 size={16} />Buat draft & snapshot</Button>
+    </div>
+  </Modal>;
 }
 
 export function DocumentPreview({ doc, photoUrls = {} }: { doc: DocumentView; photoUrls?: Record<string, string> }) {
@@ -36,18 +85,18 @@ function Block({ block, photoUrls }: { block: DocumentBlockView; photoUrls: Reco
   return null;
 }
 
-/* Papan dokumen: tiga kolom keadaan (draf/review, final, arsip). Statusnya
-   berasal dari alur dokumen yang sudah ada — DRAFT & IN_REVIEW, FINAL, lalu
-   SUPERSEDED sebagai arsip revisi lama. Tidak ada aksi baru di sini. */
+/* Papan dokumen: empat kolom keadaan (draf/review, final, arsip revisi, arsip
+   manual). Status ARCHIVED ditambahkan S4 bersama alasan pengarsipan. */
 const DOC_COLUMNS = [
   { id: "wip", label: "Draf & review", hint: "bisa diedit", match: ["DRAFT", "IN_REVIEW"] },
-  { id: "final", label: "Final terkunci", hint: "snapshot + nomor", match: ["FINAL"] },
-  { id: "archive", label: "Arsip revisi", hint: "digantikan revisi baru", match: ["SUPERSEDED"] },
+  { id: "final", label: "Final terkunci", hint: "snapshot + nomor + PDF/DOCX", match: ["FINAL"] },
+  { id: "superseded", label: "Digantikan revisi", hint: "revisi lama", match: ["SUPERSEDED"] },
+  { id: "archived", label: "Diarsipkan", hint: "alasan tercatat", match: ["ARCHIVED"] },
 ] as const;
 
 function KanbanDocs({ docs, onOpen }: { docs: DocumentView[]; onOpen: (doc: DocumentView) => void }) {
   return (
-    <div className="grid gap-3 lg:grid-cols-3">
+    <div className="grid gap-3 lg:grid-cols-4">
       {DOC_COLUMNS.map((col) => {
         const items = docs.filter((d) => (col.match as readonly string[]).includes(d.status));
         return (
@@ -63,7 +112,7 @@ function KanbanDocs({ docs, onOpen }: { docs: DocumentView[]; onOpen: (doc: Docu
               {items.length ? items.map((doc) => (
                 <button key={doc.id} onClick={() => onOpen(doc)} className="block w-full rounded-[var(--radius-control)] border border-line bg-surface p-2.5 text-left transition-[border-color,box-shadow] hover:border-line-strong hover:shadow-[var(--shadow-e1)]">
                   <div className="flex items-start justify-between gap-2">
-                    <span className="mono text-[9.5px] uppercase tracking-[.08em] text-subtle">{doc.templateCode}</span>
+                    <span className="mono text-[9.5px] uppercase tracking-[.08em] text-subtle">{doc.templateCode ?? "UPLOAD"}</span>
                     <span className="mono text-[9.5px] text-subtle">r{doc.revisionNo}</span>
                   </div>
                   <p className="mt-1 line-clamp-2 text-[11.5px] font-semibold leading-[1.35] text-ink">{doc.title}</p>
@@ -83,15 +132,167 @@ function KanbanDocs({ docs, onOpen }: { docs: DocumentView[]; onOpen: (doc: Docu
 }
 
 export function DocumentsCenter({ data, onSaved, onCreate, projectId }: { data: AppData; onSaved: Notify; onCreate: () => void; projectId?: string }) {
-  const docs = data.documents.filter((d) => !projectId || d.projectId === projectId); const photoUrls = Object.fromEntries(data.fieldPhotos.map((p) => [p.fileId, p.fileUrl])); const [selected, setSelected] = useState<DocumentView | null>(null); const [loading, setLoading] = useState(false); const [error, setError] = useState(""); const [uploadOpen, setUploadOpen] = useState(false); const [uploading, setUploading] = useState(false); const [uploadForm, setUploadForm] = useState({ title: "", category: "OTHER", projectId: projectId || data.projects[0]?.id || "", fileId: "" }); const [editing, setEditing] = useState(false); const [blockJson, setBlockJson] = useState(""); const [editorTitle, setEditorTitle] = useState("");
-  const startEditing = () => { if (!selected) return; setEditorTitle(selected.title); setBlockJson(JSON.stringify(selected.blocks || [], null, 2)); setEditing(true); };
-  const saveBlocks = async () => { if (!selected) return; setLoading(true); setError(""); try { const blocks = JSON.parse(blockJson) as Record<string, unknown>[]; if (!Array.isArray(blocks)) throw new Error("Blok harus berupa array JSON."); await api(`/api/documents/${selected.id}`, { method: "PATCH", body: JSON.stringify({ title: editorTitle, blocks }) }); onSaved("Blok dokumen diperbarui; snapshot data asli tetap tidak berubah."); setEditing(false); setSelected(null); } catch (e) { setError(e instanceof Error ? e.message : "JSON blok tidak valid"); } finally { setLoading(false); } };
-  const action = async (type: "FINALIZE" | "REVISE") => { if (!selected) return; setLoading(true); setError(""); try { await api(`/api/documents/${selected.id}/action`, { method: "POST", body: JSON.stringify({ action: type }) }); onSaved(type === "FINALIZE" ? "Dokumen FINAL: nomor dialokasikan dan PDF berhasil dibuat." : "Revisi baru dibuat; dokumen sebelumnya ditandai SUPERSEDED."); setSelected(null); } catch (e) { setError(e instanceof Error ? e.message : "Aksi dokumen gagal"); } finally { setLoading(false); } };
-  const upload = async (file?: File) => { if (!file) return; setUploading(true); try { const result = await uploadFile(file); setUploadForm((old) => ({ ...old, fileId: result.id, title: old.title || file.name.replace(/\.[^.]+$/, "") })); } catch (e) { setError(e instanceof Error ? e.message : "Upload gagal"); } finally { setUploading(false); } };
-  const saveUpload = async () => { setLoading(true); try { await api("/api/documents", { method: "POST", body: JSON.stringify({ action: "UPLOAD", ...uploadForm }) }); onSaved("Dokumen eksternal berhasil disimpan pada storage privat."); setUploadOpen(false); } catch (e) { setError(e instanceof Error ? e.message : "Gagal menyimpan dokumen"); } finally { setLoading(false); } };
-  return <div>{!projectId ? <SectionTitle eyebrow="Template & arsip" title="Dokumen proyek" description="Dokumen final memiliki snapshot, nomor, dan PDF yang terkunci. Revisi tidak menimpa versi sebelumnya." action={<div className="flex gap-2">{data.user.permissions.includes("document.upload") ? <Button variant="secondary" onClick={() => setUploadOpen(true)}><Upload size={15} />Unggah</Button> : null}<Button variant="lime" onClick={onCreate}><FilePlus2 size={15} />Generate dokumen</Button></div>} /> : <div className="mb-5 flex items-center justify-between"><div><h2 className="text-lg font-semibold">Dokumen & template</h2><p className="mt-1 text-xs text-muted">11 template blok, snapshot, preview, dan PDF final.</p></div><div className="flex gap-2"><Button variant="secondary" size="sm" onClick={() => setUploadOpen(true)}><Upload size={14} />Unggah</Button><Button size="sm" onClick={onCreate}><FilePlus2 size={14} />Generate</Button></div></div>}
-    {!docs.length ? <EmptyState icon={<FileText />} title="Belum ada dokumen" description="Generate BAST, laporan progres, invoice, atau unggah dokumen eksternal untuk proyek ini." /> : <KanbanDocs docs={docs} onOpen={setSelected} />}
-    <Modal open={!!selected} onClose={() => { setSelected(null); setError(""); }} title={selected?.title || "Preview dokumen"} eyebrow={selected?.docNumber || "Print preview"} wide>{selected ? <div><div className="no-print mb-4 flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-control)] bg-paper p-3"><div className="text-xs text-muted">Status <Badge value={selected.status} /><span className="ml-2">Snapshot dan template v{selected.templateVersion}</span></div><div className="flex flex-wrap gap-2"><Button size="sm" variant="ghost" onClick={() => window.print()}><Printer size={14} />Cetak preview</Button>{selected.fileUrl ? <a href={selected.fileUrl} target="_blank" className="inline-flex min-h-9 items-center gap-2 rounded-[var(--radius-control)] border border-line bg-surface px-3 text-xs font-semibold"><Download size={14} />Buka PDF / file</a> : null}{["DRAFT", "IN_REVIEW"].includes(selected.status) ? <Button size="sm" variant="secondary" onClick={startEditing}>Edit blok</Button> : null}{["DRAFT", "IN_REVIEW"].includes(selected.status) && data.user.permissions.includes("gendoc.finalize") ? <Button size="sm" variant="lime" loading={loading} onClick={() => void action("FINALIZE")}><FileCheck2 size={14} />Finalisasi & buat PDF</Button> : null}{selected.status === "FINAL" ? <Button size="sm" variant="secondary" loading={loading} onClick={() => void action("REVISE")}><RefreshCw size={14} />Buat revisi</Button> : null}</div></div>{error ? <p className="mb-3 text-xs text-danger">{error}</p> : null}{editing ? <div className="no-print rounded-[var(--radius-card)] border border-line bg-surface p-4"><Field label="Judul dokumen"><Input value={editorTitle} onChange={(e) => setEditorTitle(e.target.value)} /></Field><Field label="Blok dokumen (JSON)" hint="Tipe yang didukung: heading, paragraph, keyValue, table, signature, spacer, pageBreak, photoGallery." className="mt-4"><textarea value={blockJson} onChange={(e) => setBlockJson(e.target.value)} spellCheck={false} className="min-h-[420px] w-full rounded-[var(--radius-control)] border border-line bg-ink p-4 font-mono text-xs leading-relaxed text-lime outline-none" /></Field><div className="mt-4 flex justify-end gap-2"><Button variant="ghost" onClick={() => setEditing(false)}>Kembali ke preview</Button><Button loading={loading} onClick={() => void saveBlocks()}>Simpan blok</Button></div></div> : <div className="max-h-[65vh] overflow-y-auto border border-line bg-paper-2 py-5"><DocumentPreview doc={selected} photoUrls={photoUrls} /></div>}</div> : null}</Modal>
-    <Modal open={uploadOpen} onClose={() => setUploadOpen(false)} title="Unggah dokumen eksternal"><div className="space-y-4"><Field label="Proyek"><Select value={uploadForm.projectId} onChange={(e) => setUploadForm({ ...uploadForm, projectId: e.target.value })}>{data.projects.map((p) => <option key={p.id} value={p.id}>{p.code}</option>)}</Select></Field><Field label="Judul"><Input value={uploadForm.title} onChange={(e) => setUploadForm({ ...uploadForm, title: e.target.value })} /></Field><Field label="Kategori"><Select value={uploadForm.category} onChange={(e) => setUploadForm({ ...uploadForm, category: e.target.value })}>{["CONTRACT", "PO_CLIENT", "DESIGN", "SURVEY", "SUPPLIER_INVOICE", "PAYMENT_PROOF", "TAX_SLIP", "BA", "ASBUILT", "TEST_REPORT", "WARRANTY", "MANUAL", "SLO", "PHOTO", "OTHER"].map((c) => <option key={c}>{c}</option>)}</Select></Field><label className="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-[var(--radius-control)] border border-dashed border-line bg-surface p-4 text-center"><input type="file" className="hidden" onChange={(e) => void upload(e.target.files?.[0])} /><Upload size={20} className="text-muted" /><span className="mt-2 text-xs font-semibold">{uploading ? "Mengunggah..." : uploadForm.fileId ? "File berhasil diunggah" : "Pilih PDF, gambar, XLSX, DOCX, atau DWG"}</span></label>{error ? <p className="text-xs text-danger">{error}</p> : null}<Button className="w-full" loading={loading} disabled={!uploadForm.fileId || !uploadForm.title} onClick={() => void saveUpload()}>Simpan ke arsip proyek</Button></div></Modal>
+  const docs = data.documents.filter((d) => !projectId || d.projectId === projectId);
+  const photoUrls = Object.fromEntries(data.fieldPhotos.map((p) => [p.fileId, p.fileUrl]));
+  const [tab, setTab] = useState<"board" | "templates">("board");
+  const [selected, setSelected] = useState<DocumentView | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadForm, setUploadForm] = useState({
+    title: "", category: "OTHER", projectId: projectId || data.projects[0]?.id || "", fileId: "",
+  });
+  const [editing, setEditing] = useState(false);
+  const [draftBlocks, setDraftBlocks] = useState<EditableBlock[]>([]);
+  const [editorTitle, setEditorTitle] = useState("");
+
+  const canManageTemplates = data.user.permissions.includes("template.manage");
+  const canCreate = data.user.permissions.includes("gendoc.create");
+
+  const startEditing = () => {
+    if (!selected) return;
+    setEditorTitle(selected.title);
+    setDraftBlocks((selected.blocks ?? []) as unknown as EditableBlock[]);
+    setEditing(true);
+  };
+
+  const saveBlocks = async () => {
+    if (!selected) return;
+    setLoading(true); setError("");
+    try {
+      await updateDocumentBlocks(selected.id, { title: editorTitle, blocks: draftBlocks });
+      onSaved("Blok dokumen diperbarui; snapshot data asli tetap tidak berubah.");
+      setEditing(false);
+      setSelected(null);
+    } catch (e) { setError(e instanceof Error ? e.message : "Gagal menyimpan blok."); } finally { setLoading(false); }
+  };
+
+  const action = async (type: "FINALIZE" | "REVISE" | "ARCHIVE") => {
+    if (!selected) return;
+    let reason: string | undefined;
+    if (type === "ARCHIVE") {
+      const answer = window.prompt("Alasan mengarsipkan dokumen? (min. 5 karakter)");
+      if (!answer) return;
+      reason = answer;
+    }
+    setLoading(true); setError("");
+    try {
+      const result = await actOnDocument(selected.id, type, reason);
+      onSaved(type === "FINALIZE"
+        ? `Dokumen FINAL ${result.docNumber ?? ""}: PDF + DOCX tersimpan di storage privat.`
+        : type === "REVISE"
+          ? "Revisi baru dibuat; dokumen sebelumnya ditandai SUPERSEDED."
+          : "Dokumen diarsipkan; berkas final tetap tersimpan.");
+      setSelected(null);
+    } catch (e) { setError(e instanceof Error ? e.message : "Aksi dokumen gagal"); } finally { setLoading(false); }
+  };
+
+  const upload = async (file?: File) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const result = await uploadFile(file);
+      setUploadForm((old) => ({ ...old, fileId: result.id, title: old.title || file.name.replace(/\.[^.]+$/, "") }));
+    } catch (e) { setError(e instanceof Error ? e.message : "Upload gagal"); } finally { setUploading(false); }
+  };
+
+  const saveUpload = async () => {
+    setLoading(true);
+    try {
+      await fetch("/api/documents", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "UPLOAD", ...uploadForm }),
+      }).then(async (response) => {
+        if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || "Gagal menyimpan dokumen");
+      });
+      onSaved("Dokumen eksternal tersimpan pada storage privat.");
+      setUploadOpen(false);
+    } catch (e) { setError(e instanceof Error ? e.message : "Gagal menyimpan dokumen"); } finally { setLoading(false); }
+  };
+
+  return <div>
+    {!projectId ? <SectionTitle
+      eyebrow="Template, generator & arsip"
+      title="Dokumen proyek"
+      description="Template dikelola di database (bisa diubah tanpa deploy), dokumen final memiliki snapshot, nomor, PDF + DOCX terkunci, dan revisi tidak menimpa versi sebelumnya."
+      action={<div className="flex flex-wrap gap-2">
+        {data.user.permissions.includes("document.upload") ? <Button variant="secondary" onClick={() => setUploadOpen(true)}><Upload size={15} />Unggah</Button> : null}
+        <Button variant="lime" onClick={onCreate}><FilePlus2 size={15} />Generate dokumen</Button>
+      </div>}
+    /> : <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
+      <div>
+        <h2 className="text-lg font-semibold">Dokumen & template</h2>
+        <p className="mt-1 text-xs text-muted">Template DB, snapshot variabel, preview blok, PDF + DOCX final.</p>
+      </div>
+      <div className="flex gap-2">
+        {data.user.permissions.includes("document.upload") ? <Button variant="secondary" size="sm" onClick={() => setUploadOpen(true)}><Upload size={14} />Unggah</Button> : null}
+        <Button size="sm" onClick={onCreate}><FilePlus2 size={14} />Generate</Button>
+      </div>
+    </div>}
+
+    <div role="tablist" aria-label="Bagian dokumen" className="mb-4 flex flex-wrap gap-1.5 rounded-[var(--radius-control)] border border-line bg-surface p-1">
+      {([{ id: "board", label: "Papan dokumen", icon: FileText }, { id: "templates", label: "Template", icon: Settings2 }] as const).map((item) => (
+        <button key={item.id} role="tab" aria-selected={tab === item.id} onClick={() => setTab(item.id)}
+          className={`inline-flex min-h-9 items-center gap-1.5 rounded-[var(--radius-control)] px-3 text-xs font-semibold transition-colors ${tab === item.id ? "bg-ink text-white" : "text-muted hover:bg-paper-2"}`}>
+          <item.icon size={14} />{item.label}
+        </button>
+      ))}
+    </div>
+
+    {tab === "templates"
+      ? <TemplateAdmin canManage={canManageTemplates} onSaved={onSaved} />
+      : <>
+        {!docs.length ? <EmptyState icon={<FileText />} title="Belum ada dokumen" description="Generate BAST, laporan progres, invoice, atau unggah dokumen eksternal untuk proyek ini." /> : <KanbanDocs docs={docs} onOpen={setSelected} />}
+      </>}
+
+    <Modal open={!!selected} onClose={() => { setSelected(null); setError(""); }} title={selected?.title || "Preview dokumen"} eyebrow={selected?.docNumber || "Print preview"} wide>
+      {selected ? <div>
+        <div className="no-print mb-4 flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-control)] bg-paper p-3">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+            Status <Badge value={selected.status} />
+            <span className="mono">{selected.templateCode || "unggahan"}</span>
+            <span>v{selected.templateVersion}</span>
+            {selected.templateName ? <span className="truncate">· {selected.templateName}</span> : null}
+            {selected.archiveReason ? <span className="text-danger">· {selected.archiveReason}</span> : null}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="ghost" onClick={() => window.print()}><Printer size={14} />Cetak preview</Button>
+            {selected.fileUrl ? <a href={selected.fileUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-9 items-center gap-2 rounded-[var(--radius-control)] border border-line bg-surface px-3 text-xs font-semibold"><Download size={14} />Buka PDF</a> : null}
+            {selected.docxUrl ? <a href={selected.docxUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-9 items-center gap-2 rounded-[var(--radius-control)] border border-line bg-surface px-3 text-xs font-semibold"><Download size={14} />Unduh DOCX</a> : null}
+            {["DRAFT", "IN_REVIEW"].includes(selected.status) && canCreate ? <Button size="sm" variant="secondary" onClick={startEditing}>Edit blok</Button> : null}
+            {["DRAFT", "IN_REVIEW"].includes(selected.status) && data.user.permissions.includes("gendoc.finalize")
+              ? <Button size="sm" variant="lime" loading={loading} onClick={() => void action("FINALIZE")}><FileCheck2 size={14} />Finalisasi (PDF + DOCX)</Button> : null}
+            {selected.status === "FINAL" ? <Button size="sm" variant="secondary" loading={loading} onClick={() => void action("REVISE")}><RefreshCw size={14} />Buat revisi</Button> : null}
+            {!["ARCHIVED"].includes(selected.status) ? <Button size="sm" variant="ghost" className="text-danger" loading={loading} onClick={() => void action("ARCHIVE")}><Archive size={14} />Arsipkan</Button> : null}
+          </div>
+        </div>
+        {error ? <p className="mb-3 text-xs text-danger">{error}</p> : null}
+        {editing ? <div className="no-print rounded-[var(--radius-card)] border border-line bg-surface p-4">
+          <Field label="Judul dokumen"><Input value={editorTitle} onChange={(e) => setEditorTitle(e.target.value)} /></Field>
+          <p className="mb-2 mt-4 text-xs font-semibold">Blok dokumen</p>
+          <BlockEditor blocks={draftBlocks} onChange={setDraftBlocks} />
+          <div className="mt-4 flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setEditing(false)}>Kembali ke preview</Button>
+            <Button loading={loading} onClick={() => void saveBlocks()}>Simpan blok</Button>
+          </div>
+        </div> : <div className="max-h-[65vh] overflow-y-auto border border-line bg-paper-2 py-5"><DocumentPreview doc={selected} photoUrls={photoUrls} /></div>}
+      </div> : null}
+    </Modal>
+
+    <Modal open={uploadOpen} onClose={() => setUploadOpen(false)} title="Unggah dokumen eksternal">
+      <div className="space-y-4">
+        <Field label="Proyek"><Select value={uploadForm.projectId} onChange={(e) => setUploadForm({ ...uploadForm, projectId: e.target.value })}>{data.projects.map((p) => <option key={p.id} value={p.id}>{p.code}</option>)}</Select></Field>
+        <Field label="Judul"><Input value={uploadForm.title} onChange={(e) => setUploadForm({ ...uploadForm, title: e.target.value })} /></Field>
+        <Field label="Kategori"><Select value={uploadForm.category} onChange={(e) => setUploadForm({ ...uploadForm, category: e.target.value })}>{["CONTRACT", "PO_CLIENT", "DESIGN", "SURVEY", "SUPPLIER_INVOICE", "PAYMENT_PROOF", "TAX_SLIP", "BA", "ASBUILT", "TEST_REPORT", "WARRANTY", "MANUAL", "SLO", "PHOTO", "OTHER"].map((c) => <option key={c}>{c}</option>)}</Select></Field>
+        <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-[var(--radius-control)] border border-dashed border-line bg-surface p-4 text-center">
+          <input type="file" className="hidden" onChange={(e) => void upload(e.target.files?.[0])} />
+          <Upload size={20} className="text-muted" />
+          <span className="mt-2 text-xs font-semibold">{uploading ? "Mengunggah..." : uploadForm.fileId ? "File berhasil diunggah" : "Pilih PDF, gambar, XLSX, DOCX, atau DWG"}</span>
+        </label>
+        {error ? <p className="text-xs text-danger">{error}</p> : null}
+        <Button className="w-full" loading={loading} disabled={!uploadForm.fileId || !uploadForm.title} onClick={() => void saveUpload()}>Simpan ke arsip proyek</Button>
+      </div>
+    </Modal>
   </div>;
 }
