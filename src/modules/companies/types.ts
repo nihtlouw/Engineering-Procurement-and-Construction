@@ -12,6 +12,8 @@ export type MemberView = {
   status: string;
   joinedAt: string;
   invitedBy: string | null;
+  /** 0010: akun sedang terkunci karena percobaan login gagal. */
+  lockedUntil: string | null;
 };
 
 export type InviteResult = {

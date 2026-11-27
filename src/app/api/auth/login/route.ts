@@ -13,9 +13,18 @@ const schema = z.object({
 
 const MAX_FAILURES_PER_MINUTE = 8;
 const WINDOW_MS = 60_000;
+/* 0010: ambang kunci akun. 10 kegagalan → 15 menit, 20 → 60 menit.
+   Penghitung bertahan di DB sehingga tidak hilang saat instance Vercel didaur. */
+const LOCK_THRESHOLDS = [
+  { failures: 20, minutes: 60 },
+  { failures: 10, minutes: 15 },
+];
+export function lockMinutesFor(failures: number): number {
+  return LOCK_THRESHOLDS.find((threshold) => failures >= threshold.failures)?.minutes ?? 0;
+}
 
 async function recordAuthEvent(input: {
-  email: string; action: "LOGIN_SUCCESS" | "LOGIN_FAILED" | "RATE_LIMITED";
+  email: string; action: "LOGIN_SUCCESS" | "LOGIN_FAILED" | "RATE_LIMITED" | "ACCOUNT_LOCKED";
   userId?: string; companyId?: string; ip?: string;
 }) {
   await baseDb.insert(authEvents).values({
@@ -48,9 +57,38 @@ async function POSTHandler(request: Request) {
     }
 
     const [user] = await baseDb.select().from(users).where(eq(users.email, email)).limit(1);
+
+    // Akun terkunci: SELALU ditolak sebelum verifikasi password, dan tidak
+    // menambah penghitung (supaya penyerang tidak memperpanjang kunci sendiri).
+    if (user?.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
+      await recordAuthEvent({ email, action: "RATE_LIMITED", ip, userId: user.id });
+      return Response.json({
+        code: "ACCOUNT_LOCKED",
+        message: `Akun terkunci sementara karena percobaan gagal berulang. Coba lagi setelah ${user.lockedUntil.toISOString().slice(11, 16)} UTC.`,
+      }, { status: 423 });
+    }
+
     if (!user || !user.isActive || !verifyPassword(body.password, user.passwordHash)) {
+      // Hitung kegagalan per akun; hanya untuk email yang benar-benar terdaftar
+      // supaya pesan error tetap seragam (tidak membocorkan keberadaan akun).
+      if (user) {
+        const failures = user.failedLoginCount + 1;
+        const lockMinutes = lockMinutesFor(failures);
+        await baseDb.update(users).set({
+          failedLoginCount: failures,
+          lockedUntil: lockMinutes ? new Date(Date.now() + lockMinutes * 60_000) : null,
+        }).where(eq(users.id, user.id));
+        if (lockMinutes) {
+          await recordAuthEvent({ email, action: "ACCOUNT_LOCKED", ip, userId: user.id });
+        }
+      }
       await recordAuthEvent({ email, action: "LOGIN_FAILED", ip });
       return Response.json({ code: "INVALID_CREDENTIALS", message: "Email atau password tidak sesuai." }, { status: 401 });
+    }
+
+    // Login berhasil: bersihkan penghitung + kunci.
+    if (user.failedLoginCount || user.lockedUntil) {
+      await baseDb.update(users).set({ failedLoginCount: 0, lockedUntil: null }).where(eq(users.id, user.id));
     }
 
     // Role & company diambil dari keanggotaan AKTIF, bukan dari users.role.

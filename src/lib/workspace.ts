@@ -38,6 +38,10 @@ export async function getWorkspaceData(user: SessionUser): Promise<WorkspaceData
   const siteMap = new Map(siteRows.map((s) => [s.id, s]));
   const categoryMap = new Map(categoryRows.map((c) => [c.id, c]));
   const canInternal = hasPermission(user, "budget.internal.view");
+  /** Siapa yang boleh membuka berkas nota: pelaku, approver, ADMIN, FINANCE. */
+  const canSeeReceipt = (expense: { createdById: string; assignedApproverId: string | null }) =>
+    expense.createdById === user.id || expense.assignedApproverId === user.id
+    || user.role === "ADMIN" || user.role === "FINANCE";
   const canClient = hasPermission(user, "budget.client.view");
   const canProjectExpenses = hasPermission(user, "expense.view.project");
   const canOwnExpenses = hasPermission(user, "expense.view.own");
@@ -99,7 +103,10 @@ export async function getWorkspaceData(user: SessionUser): Promise<WorkspaceData
     ...e,
     createdByName: userMap.get(e.createdById)?.name ?? "Pengguna tidak dikenal",
     approverName: e.assignedApproverId ? userMap.get(e.assignedApproverId)?.name : null,
-    receiptUrl: fileUrl(e.receiptFileId),
+    /* Audit #3: URL nota bertanda tangan adalah kredensial baca 5 menit. Hanya
+       pembuat, approver, ADMIN, dan FINANCE yang menerimanya; pemegang
+       `expense.view.project` lain melihat nota itu tanpa tautan berkas. */
+    receiptUrl: canSeeReceipt(e) ? fileUrl(e.receiptFileId) : null,
     lines: e.lines.map((line) => {
       const budgetLine = budgetLineRows.find((b) => b.id === line.budgetLineId);
       return { ...line, categoryCode: categoryMap.get(line.costCategoryId)?.code, categoryName: categoryMap.get(line.costCategoryId)?.name, projectCode: projectRows.find((p) => p.id === line.projectId)?.code, budgetLineCode: budgetLine?.code, budgetLineDescription: budgetLine?.description };
@@ -198,7 +205,9 @@ export async function getWorkspaceData(user: SessionUser): Promise<WorkspaceData
     punchItems: punchRows.filter((p) => allowedIds.includes(p.projectId)), handoverItems: handoverRows.filter((h) => allowedIds.includes(h.projectId)),
     documents: visibleDocuments,
     fieldPhotos: visibleFieldPhotos,
-    activities: hasPermission(user, "audit.view") ? activityRows.filter((a) => !a.projectId || allowedIds.includes(a.projectId)).map((a) => ({ ...a, actorName: a.actorId ? userMap.get(a.actorId)?.name : "Sistem" })) : [],
+    /* `actorId` adalah identifier internal: klien hanya butuh nama + objek yang
+       disentuh. Menyembunyikannya mengurangi permukaan enumerasi user. */
+    activities: hasPermission(user, "audit.view") ? activityRows.filter((a) => !a.projectId || allowedIds.includes(a.projectId)).map(({ actorId, ...rest }) => ({ ...rest, actorName: actorId ? userMap.get(actorId)?.name : "Sistem" })) : [],
     notifications: notificationRows, metrics, closeChecks,
   };
 }

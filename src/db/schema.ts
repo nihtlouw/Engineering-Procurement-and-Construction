@@ -27,6 +27,9 @@ export const users = pgTable("users", {
   role: text("role").notNull(),
   title: text("title").notNull(),
   isActive: boolean("is_active").notNull().default(true),
+  // 0010: kunci akun setelah kegagalan login berulang (audit #7).
+  failedLoginCount: integer("failed_login_count").notNull().default(0),
+  lockedUntil: timestamp("locked_until", { withTimezone: true }),
   createdAt: createdAt(),
 });
 

@@ -179,6 +179,27 @@ async function main() {
       Number(wbsBackfill.rows[0].missing) === 0
         ? `${wbsBackfill.rows[0].total} item jadwal punya kode & level`
         : `${wbsBackfill.rows[0].missing}/${wbsBackfill.rows[0].total} item belum berkode — ulangi migrasi 0009`);
+    // ---- 0010: kunci akun login -------------------------------------------
+    const lockColumns = await db.query(`SELECT count(*)::int AS n FROM information_schema.columns
+      WHERE table_schema='public' AND table_name='users'
+        AND column_name IN ('failed_login_count','locked_until')`);
+    const lockColumnCount = Number(lockColumns.rows[0].n);
+    check("0010 kolom kunci login", lockColumnCount === 2,
+      lockColumnCount === 2 ? "failed_login_count & locked_until ada" : `${lockColumnCount}/2 kolom — jalankan migrasi 0010`);
+
+    const lockIndex = await db.query(`SELECT indexdef FROM pg_indexes WHERE indexname='users_locked_until_idx'`);
+    check("0010 index akun terkunci", lockIndex.rows.length === 1 && /WHERE \(locked_until IS NOT NULL\)/.test(String(lockIndex.rows[0].indexdef)),
+      lockIndex.rows.length === 1 ? "index parsial hanya untuk akun yang sedang terkunci" : "index users_locked_until_idx belum ada — jalankan 0010");
+
+    // Constraint diuji langsung: nilai negatif harus ditolak DB, bukan hanya aplikasi.
+    let negativeRejected = false;
+    try {
+      await db.query("SAVEPOINT lock_check");
+      await db.query("UPDATE users SET failed_login_count = -1 WHERE id = $1", [companyA]);
+      await db.query("ROLLBACK TO SAVEPOINT lock_check");
+    } catch { negativeRejected = true; }
+    check("0010 CHECK penghitung", negativeRejected,
+      negativeRejected ? "DB menolak failed_login_count negatif" : "CHECK users_failed_login_count_check tidak aktif — jalankan 0010");
   } finally {
     // Bersihkan data uji.
     try {

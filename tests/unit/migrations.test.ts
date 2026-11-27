@@ -4,7 +4,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { beforeAll, afterAll, describe, expect, it } from "vitest";
 
 /**
- * Uji SELURUH migrasi (0000 → 0009) dari database kosong TANPA server
+ * Uji SELURUH migrasi (0000 → 0010) dari database kosong TANPA server
  * Postgres eksternal. PGlite = Postgres (WASM) in-process. Baseline di bawah
  * meniru skema 28 tabel pra-S1; bukan pengganti `npm run db:verify` pada DB nyata.
  */
@@ -123,7 +123,7 @@ INSERT INTO customer_invoices (id,project_id,contract_term_id,number,type,total_
   await db.exec(ddl);
 
   const dir = path.resolve(process.cwd(), "drizzle");
-  for (const file of ["0000_tenant_foundation.sql", "0001_rls_policies.sql", "0002_s2a_budgeting_ptk.sql", "0003_s2b_po_terms_co.sql", "0004_s3_field_photos.sql", "0005_hardening_invoice_notifications.sql", "0006_master_data_codes.sql", "0007_terms_catalog.sql", "0008_document_templates.sql", "0009_wbs_scurve.sql"]) {
+  for (const file of ["0000_tenant_foundation.sql", "0001_rls_policies.sql", "0002_s2a_budgeting_ptk.sql", "0003_s2b_po_terms_co.sql", "0004_s3_field_photos.sql", "0005_hardening_invoice_notifications.sql", "0006_master_data_codes.sql", "0007_terms_catalog.sql", "0008_document_templates.sql", "0009_wbs_scurve.sql", "0010_login_lockout.sql"]) {
     await db.exec(readFileSync(path.join(dir, file), "utf8"));
   }
   // PGlite default = superuser (BYPASSRLS). Neon/Supabase memakai role non-superuser.
@@ -714,5 +714,32 @@ describe("migrasi 0009 · WBS & kurva-S", () => {
     expect(fks.map((row) => row.conname)).toEqual(["budget_lines_wbs_fk", "budget_phasing_wbs_fk"]);
     await expect(db.exec("UPDATE budget_lines SET wbs_item_id='tidak-ada' WHERE id='bl-client'")).rejects.toThrow();
     await scope(await defaultScope(), "budget.internal.view,budget.client.view,document.view");
+  });
+});
+
+describe("migrasi 0010 · kunci akun login", () => {
+  it("kolom penghitung & kunci ada dengan default 0 dan NULL", async () => {
+    const company = await defaultScope();
+    await scope(company, "users.manage");
+    // Seed baseline tidak membuat user; buat satu untuk memeriksa default.
+    await db.exec("INSERT INTO users (id, name, email, role, title, password_hash) VALUES ('u-lock','Admin','lock@uji.local','ADMIN','Admin','x:y')");
+    const [row] = await rows(`SELECT failed_login_count, locked_until FROM users WHERE id='u-lock'`);
+    expect(Number(row.failed_login_count)).toBe(0);
+    expect(row.locked_until).toBeNull();
+  });
+
+  it("CHECK menolak penghitung negatif atau tidak wajar", async () => {
+    const company = await defaultScope();
+    await scope(company, "users.manage");
+    await expect(db.exec("UPDATE users SET failed_login_count = -1")).rejects.toThrow();
+    await expect(db.exec("UPDATE users SET failed_login_count = 5000")).rejects.toThrow();
+    await db.exec("UPDATE users SET failed_login_count = 12, locked_until = now() + interval '15 minutes'");
+    const [row] = await rows("SELECT failed_login_count FROM users LIMIT 1");
+    expect(Number(row.failed_login_count)).toBe(12);
+  });
+
+  it("index parsial hanya mengindeks akun terkunci", async () => {
+    const [row] = await rows(`SELECT indexdef FROM pg_indexes WHERE indexname='users_locked_until_idx'`);
+    expect(row.indexdef).toMatch(/WHERE \(locked_until IS NOT NULL\)/);
   });
 });

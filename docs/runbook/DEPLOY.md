@@ -220,6 +220,41 @@ Urutan: backup → `npm run db:migrate -- --check` → `npm run db:migrate` → 
 
 Rincian: [`docs/modules/WBS-SCURVE.md`](../modules/WBS-SCURVE.md).
 
+## Deploy Hardening-2 (`0010_login_lockout.sql`) + perubahan jalur file
+
+Migrasi **forward-only** menambah 2 kolom pada `users` (nullable/default, tanpa
+backfill) dan 1 index parsial. Aman dijalankan tanpa downtime berarti; tidak ada
+penulisan massal ke tabel besar.
+
+**Perubahan perilaku yang harus disosialisasikan sebelum deploy:**
+
+| Perubahan | Dampak operasional |
+|---|---|
+| Batas unggah berkas generik **25 MB → 10 MB** | Nota/foto >10 MB ditolak 413. Klien mengompresi bertahap, tetapi pengguna perlu tahu batas barunya. |
+| Nota baru disimpan di object storage (`content_base64` NULL) | `FILE_STORAGE_DRIVER=s3` wajib di production (sudah wajib sejak S3). Tanpa S3, unggahan gagal 500 `STORAGE_CONFIG`. |
+| Berkas lama berprovider `DB` tetap terbaca | `getObjectBuffer()` memakai jalur dual-read; **tidak ada backfill yang diperlukan**, tetapi blob lama masih menempati DB. Pembersihan opsional di luar rilis ini. |
+| Tipe berkas ditentukan dari isi | Berkas yang selama ini lolos karena MIME salah (mis. `.dwg` dikirim sebagai `image/png`) sekarang ditolak 415. DWG tidak lagi diterima karena isinya tidak dapat diverifikasi. |
+| Akun terkunci setelah 10/20 kegagalan | Dukungan pengguna perlu tahu tombol **Pengguna & peran → Buka kunci** dan kode `423 ACCOUNT_LOCKED`. |
+| Tautan nota tidak lagi dikirim ke semua pemegang `expense.view.project` | Peran yang sebelumnya dapat mengklik nota orang lain akan melihat nota tanpa tautan. Ini disengaja (audit #3). |
+
+Urutan: `npm run db:migrate -- --check` → `npm run db:migrate` → `npm run db:verify` → deploy → smoke test login & unggah nota.
+
+| # | Kriteria Hardening-2 | Cara |
+|---|---|---|
+| 1 | Rangkaian 0000–0010 tereksekusi (34 tabel FORCE RLS, 136 policy) | `npx vitest run tests/unit/migrations.test.ts` (52 test) |
+| 2 | `db:verify` melaporkan 3 pemeriksaan 0010 | `npm run db:verify` → “0010 kolom kunci login”, “0010 index akun terkunci”, “0010 CHECK penghitung” PASS |
+| 3 | Unggah dengan MIME palsu ditolak | UAT: kirim teks sebagai `image/png` ke `POST /api/files` → 415 `MAGIC_BYTES_INVALID` / `MIME_MISMATCH` |
+| 4 | Berkas baru tidak lagi disimpan di DB | setelah unggah: `select storage_provider, content_base64 from file_objects order by created_at desc limit 1` → provider `S3`, base64 NULL |
+| 5 | Berkas lama (provider DB) masih dapat dibuka | UAT: buka nota lama dari detail pengeluaran → gambar tampil |
+| 6 | Berkas non-gambar dipaksa unduh | UAT: buka PDF/DOCX → `Content-Disposition: attachment`, header CSP `sandbox` ada |
+| 7 | Tautan nota hanya untuk pihak berhak | UAT: login FIELD lain pada proyek yang sama → nota terlihat, tombol “Buka bukti nota” tidak ada |
+| 8 | 10 kegagalan mengunci akun 15 menit | UAT: salah password 10× → respons ke-11 `423 ACCOUNT_LOCKED` (+ audit `ACCOUNT_LOCKED`) |
+| 9 | Login berhasil mereset penghitung | UAT: buka kunci/lalu login benar → `failed_login_count = 0`, `locked_until` NULL |
+| 10 | ADMIN dapat membuka kunci | UAT: **Pengguna & peran → Buka kunci** → badge “Terkunci” hilang, audit `LOGIN_UNLOCKED` muncul |
+| 11 | Ekspor jadwal mengikuti izin & memuat Σ bobot | UAT: `/api/export/schedule` sebagai FIELD → 403; sebagai PM → XLSX berisi baris “Σ bobot …” |
+| 12 | Progres pada baris ringkasan WBS ditolak | UAT: `POST /api/schedule/<id-grup>/progress` → 422 `WBS_SUMMARY_READONLY` |
+| 13 | Build/typecheck/lint/test/audit hijau | `npm run typecheck && npm run lint && npm test && npm audit --omit=dev --audit-level=high` |
+
 ## Variabel environment
 
 | Variabel | Wajib | Catatan |

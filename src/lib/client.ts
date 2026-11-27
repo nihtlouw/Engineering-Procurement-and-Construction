@@ -13,13 +13,21 @@ export async function api<T = Record<string, unknown>>(path: string, options: Re
 }
 export const uuid = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-export async function compressImage(file: File): Promise<File> {
+export async function compressImage(file: File, maxBytes = 10 * 1024 * 1024): Promise<File> {
   if (!file.type.startsWith("image/") || file.type === "image/heic") return file;
   const bitmap = await createImageBitmap(file); const scale = Math.min(1, 1800 / Math.max(bitmap.width, bitmap.height));
   const canvas = document.createElement("canvas"); canvas.width = Math.round(bitmap.width * scale); canvas.height = Math.round(bitmap.height * scale);
   const context = canvas.getContext("2d"); if (!context) return file;
   context.drawImage(bitmap, 0, 0, canvas.width, canvas.height); bitmap.close();
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", .8));
+  /* Turunkan kualitas bertahap bila hasil pertama masih melebihi batas server
+     (10 MB untuk berkas generik). Tanpa ini, foto 48 MP lolos di klien lalu
+     ditolak 413 setelah seluruh body terkirim. */
+  let quality = 0.8; let blob: Blob | null = null;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+    if (!blob || blob.size <= maxBytes) break;
+    quality -= 0.2;
+  }
   return blob ? new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), { type: "image/jpeg" }) : file;
 }
 export async function uploadFieldPhoto(
@@ -38,9 +46,16 @@ export async function uploadFieldPhoto(
   };
 }
 
+/** Batas unggah generik; harus sama dengan `MAX_GENERIC_FILE_BYTES` di server. */
+export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+
 export async function uploadFile(file: File) {
-  const compressed = await compressImage(file); const base64 = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(",")[1]); reader.onerror = reject; reader.readAsDataURL(compressed); });
-  return api<{ id: string; fileName: string; sizeBytes: number; duplicateReceipt: boolean }>("/api/files", { method: "POST", body: JSON.stringify({ fileName: compressed.name, mimeType: compressed.type || "application/octet-stream", contentBase64: base64 }) });
+  const compressed = await compressImage(file, MAX_UPLOAD_BYTES);
+  if (compressed.size > MAX_UPLOAD_BYTES) {
+    throw new Error(`Ukuran berkas ${(compressed.size / 1024 / 1024).toFixed(1)} MB melebihi batas 10 MB. Perkecil berkas terlebih dahulu.`);
+  }
+  const base64 = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(",")[1]); reader.onerror = reject; reader.readAsDataURL(compressed); });
+  return api<{ id: string; fileName: string; mimeType: string; sizeBytes: number; duplicateReceipt: boolean }>("/api/files", { method: "POST", body: JSON.stringify({ fileName: compressed.name, mimeType: compressed.type || "application/octet-stream", contentBase64: base64 }) });
 }
 
 /* -------------------------------------------------------------------------- */

@@ -13,6 +13,10 @@ async function POSTHandler(request: Request, { params }: { params: Promise<{ id:
     const user = await requireUser(); assertPermission(user, "progress.create"); const { id } = await params; const body = schema.parse(await request.json());
     const [item] = await db.select().from(scheduleItems).where(eq(scheduleItems.id, id)).limit(1); if (!item) throw new ApiError("NOT_FOUND", "Item jadwal tidak ditemukan.", 404);
     await requireProject(user, item.projectId, "progress.create");
+    /* S5: laporan lapangan tidak boleh menimpa aktivitas grup (bobot 0). Bila
+       grup ikut dilaporkan, Σ(bobot × progres) menghitung pekerjaan yang sama
+       dua kali — sekali di grup, sekali di aktivitas anaknya. */
+    if (item.isSummary) throw new ApiError("WBS_SUMMARY_READONLY", "Baris ringkasan WBS tidak dapat dilaporkan. Catat progres pada aktivitas di dalamnya.", 422);
     const [existing] = await db.select().from(progressUpdates).where(eq(progressUpdates.clientUuid, body.clientUuid)).limit(1);
     if (existing) return Response.json({ data: { id: existing.id, idempotent: true } });
     const pct = D(body.progressPct); if (pct.lt(0) || pct.gt(100)) throw new ApiError("INVALID_PROGRESS", "Progres harus antara 0 dan 100 persen.", 422);
