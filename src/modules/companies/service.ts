@@ -4,6 +4,8 @@ import { baseDb, db } from "@/db";
 import { activityLogs, companies, invitations, memberships, sessions, users } from "@/db/schema";
 import { ApiError, hashPassword, hashToken, verifyPassword } from "@/lib/auth";
 import { type Role } from "@/lib/domain";
+import { appBaseUrl, revokeActiveResetTokens } from "@/modules/auth/password-reset";
+import { invitationEmail, sendEmail } from "@/modules/notifications/email";
 import type { CompanyView, InviteResult, MemberView, PendingInviteView } from "@/modules/companies/types";
 import type { AcceptInviteInput, InviteInput, UpdateMemberInput } from "@/modules/companies/validation";
 
@@ -83,10 +85,27 @@ export async function createInvitation(
     actorId, companyId, changes: [{ field: "companyRole", old: null, new: input.companyRole }],
   });
 
+  /* 0011: kirim tautan lewat email bila dikonfigurasi. Bila belum, tautan tetap
+     ditampilkan sekali di UI (jalur manual) — perilaku lama tidak hilang, hanya
+     bertambah. Kegagalan email TIDAK membatalkan undangan yang sudah tersimpan. */
+  const base = appBaseUrl();
+  const acceptPath = `/accept-invite?token=${token}`;
+  let emailDelivered = false;
+  if (base) {
+    const [company] = await db.select({ name: companies.name }).from(companies).where(eq(companies.id, companyId)).limit(1);
+    const message = invitationEmail({
+      companyName: company?.name ?? "perusahaan Anda",
+      roleLabel: roleTitle(input.companyRole as Role),
+      link: `${base}${acceptPath}`,
+      expiresHours: INVITE_TTL_HOURS,
+    });
+    const sent = await sendEmail({ ...message, to: input.email });
+    emailDelivered = sent.delivered;
+  }
   return {
     email: input.email, companyRole: input.companyRole as Role, token,
     expiresAt: expiresAt.toISOString(), delivery: "manual",
-    acceptPath: `/accept-invite?token=${token}`,
+    acceptPath, emailDelivered,
   };
 }
 
@@ -233,6 +252,8 @@ export async function resetMemberPassword(
     lockedUntil: null,
   }).where(eq(users.id, targetUserId));
   await revokeSessions(targetUserId);
+  // 0011: tautan reset yang mungkin masih beredar ikut dicabut.
+  await revokeActiveResetTokens(targetUserId);
   await db.insert(activityLogs).values({
     id: randomUUID(), objectType: "USER", objectId: targetUserId, action: "PASSWORD_RESET",
     actorId, companyId,
@@ -257,6 +278,7 @@ export async function changeOwnPassword(
   await baseDb.update(users).set({ passwordHash: hashPassword(newPassword) }).where(eq(users.id, userId));
   // Sesi lain dicabut, sesi sekarang dipertahankan agar pengguna tidak terlempar.
   await revokeSessions(userId, currentSessionId);
+  await revokeActiveResetTokens(userId);
   await db.insert(activityLogs).values({
     id: randomUUID(), objectType: "USER", objectId: userId, action: "PASSWORD_CHANGED",
     actorId: userId,

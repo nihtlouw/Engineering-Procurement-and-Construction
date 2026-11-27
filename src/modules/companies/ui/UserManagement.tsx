@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Copy, KeyRound, Lock, LockOpen, RefreshCw, UserPlus, Users } from "lucide-react";
+import { Copy, KeyRound, Lock, LockOpen, Mail, RefreshCw, UserPlus, Users } from "lucide-react";
 import { api } from "@/lib/client";
 import { ROLES, type Role } from "@/lib/domain";
 import { Badge, Button, EmptyState, Field, Input, Modal, SectionTitle, Select, TableSkeleton } from "@/components/ui";
@@ -93,6 +93,23 @@ export default function UserManagement({ onSaved }: { onSaved: (message: string)
     }
   };
 
+  /* Kirim tautan reset ke email anggota: admin tidak perlu tahu/mengetik
+     password siapa pun. Tautan hanya ada di email pengguna. */
+  const sendResetLink = async (member: MemberView) => {
+    setError("");
+    try {
+      const result = await api<{ delivered: boolean; email: string; reason?: string; debugLink?: string }>(
+        `/api/users/${encodeURIComponent(member.userId)}/reset-link`, { method: "POST", body: JSON.stringify({}) },
+      );
+      if (result.delivered) onSaved(`Tautan reset dikirim ke ${result.email}.`);
+      else if (result.debugLink) { setResetDone({ name: `${member.name} (tautan pengembangan)`, password: result.debugLink }); }
+      else setError(`Tautan belum terkirim: ${result.reason ?? "email belum dikonfigurasi"}. Gunakan Reset password manual.`);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Gagal mengirim tautan reset.");
+    }
+  };
+
   const unlock = async (userId: string) => {
     setError("");
     try {
@@ -114,8 +131,8 @@ export default function UserManagement({ onSaved }: { onSaved: (message: string)
 
       {resetDone ? (
         <div className="mb-4 rounded-[var(--radius-control)] border border-ok-line bg-ok-bg px-3 py-2.5 text-[12px]">
-          <p className="font-semibold text-ok">Password {resetDone.name} sudah direset</p>
-          <p className="mt-1 text-muted">Serahkan password ini lewat kanal aman, lalu minta pengguna menggantinya di menu akun. Password tidak ditampilkan lagi setelah Anda menutup pesan ini.</p>
+          <p className="font-semibold text-ok">{resetDone.name.startsWith("Password") ? resetDone.name : `Password ${resetDone.name} sudah direset`}</p>
+          <p className="mt-1 text-muted">Serahkan nilai ini lewat kanal aman, lalu minta pengguna menggantinya di menu akun. Nilai tidak ditampilkan lagi setelah Anda menutup pesan ini.</p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <code className="mono rounded bg-surface px-2 py-1.5 text-[11.5px]">{resetDone.password}</code>
             <Button variant="secondary" size="sm" onClick={() => void navigator.clipboard?.writeText(resetDone.password)}><Copy size={13} />Salin</Button>
@@ -172,8 +189,11 @@ export default function UserManagement({ onSaved }: { onSaved: (message: string)
                       <Button variant="secondary" size="sm" onClick={() => void unlock(m.userId)}><LockOpen size={13} />Buka kunci</Button>
                     </>
                   ) : null}
+                  <Button variant="ghost" size="sm" onClick={() => void sendResetLink(m)}>
+                    <Mail size={13} />Kirim tautan
+                  </Button>
                   <Button variant="ghost" size="sm" onClick={() => { setResetFor(m); setResetPassword(""); }}>
-                    <KeyRound size={13} />Reset password
+                    <KeyRound size={13} />Reset manual
                   </Button>
                   <Button variant="ghost" size="sm" onClick={() => void changeMember(m.userId, { status: m.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE" })}>
                     {m.status === "ACTIVE" ? "Nonaktifkan" : "Aktifkan"}

@@ -13,6 +13,9 @@ const PUBLIC_PATHS = [
   "/api/auth/login",
   "/api/auth/logout",
   "/api/auth/accept-invite",
+  // Reset password: pengguna BELUM punya sesi saat memakai kedua route ini.
+  "/api/auth/forgot-password",
+  "/api/auth/reset-password",
   "/api/health",
 ];
 

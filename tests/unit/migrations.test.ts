@@ -4,7 +4,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { beforeAll, afterAll, describe, expect, it } from "vitest";
 
 /**
- * Uji SELURUH migrasi (0000 → 0010) dari database kosong TANPA server
+ * Uji SELURUH migrasi (0000 → 0011) dari database kosong TANPA server
  * Postgres eksternal. PGlite = Postgres (WASM) in-process. Baseline di bawah
  * meniru skema 28 tabel pra-S1; bukan pengganti `npm run db:verify` pada DB nyata.
  */
@@ -123,7 +123,7 @@ INSERT INTO customer_invoices (id,project_id,contract_term_id,number,type,total_
   await db.exec(ddl);
 
   const dir = path.resolve(process.cwd(), "drizzle");
-  for (const file of ["0000_tenant_foundation.sql", "0001_rls_policies.sql", "0002_s2a_budgeting_ptk.sql", "0003_s2b_po_terms_co.sql", "0004_s3_field_photos.sql", "0005_hardening_invoice_notifications.sql", "0006_master_data_codes.sql", "0007_terms_catalog.sql", "0008_document_templates.sql", "0009_wbs_scurve.sql", "0010_login_lockout.sql"]) {
+  for (const file of ["0000_tenant_foundation.sql", "0001_rls_policies.sql", "0002_s2a_budgeting_ptk.sql", "0003_s2b_po_terms_co.sql", "0004_s3_field_photos.sql", "0005_hardening_invoice_notifications.sql", "0006_master_data_codes.sql", "0007_terms_catalog.sql", "0008_document_templates.sql", "0009_wbs_scurve.sql", "0010_login_lockout.sql", "0011_password_reset_tokens.sql"]) {
     await db.exec(readFileSync(path.join(dir, file), "utf8"));
   }
   // PGlite default = superuser (BYPASSRLS). Neon/Supabase memakai role non-superuser.
@@ -741,5 +741,31 @@ describe("migrasi 0010 · kunci akun login", () => {
   it("index parsial hanya mengindeks akun terkunci", async () => {
     const [row] = await rows(`SELECT indexdef FROM pg_indexes WHERE indexname='users_locked_until_idx'`);
     expect(row.indexdef).toMatch(/WHERE \(locked_until IS NOT NULL\)/);
+  });
+});
+
+describe("migrasi 0011 · token reset password", () => {
+  it("tabel ada, hanya hash token unik, dan tanpa RLS (control-plane)", async () => {
+    const [table] = await rows(`SELECT relrowsecurity FROM pg_class WHERE relname='password_reset_tokens' AND relkind='r'`);
+    expect(table).toBeDefined();
+    // Konsisten dengan `invitations`: identitas global, dijaga kode bukan RLS.
+    expect(table.relrowsecurity).toBe(false);
+    const indexes = await rows(`SELECT indexname FROM pg_indexes WHERE tablename='password_reset_tokens' ORDER BY indexname`);
+    const names = indexes.map((row) => row.indexname);
+    expect(names).toContain("password_reset_tokens_token_hash_key");
+    expect(names).toContain("password_reset_tokens_user_idx");
+  });
+
+  it("token_hash unik; user_id wajib merujuk akun yang ada", async () => {
+    await db.exec("INSERT INTO users (id,name,email,role,title,password_hash) VALUES ('u-reset','Reset','reset@uji.local','PM','PM','x:y')");
+    await db.exec(`INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES ('u-reset','hash-1', now() + interval '30 minutes')`);
+    await expect(db.exec(`INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES ('u-reset','hash-1', now() + interval '30 minutes')`)).rejects.toThrow();
+    await expect(db.exec(`INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES ('tidak-ada','hash-2', now() + interval '30 minutes')`)).rejects.toThrow();
+  });
+
+  it("menghapus user ikut menghapus token (ON DELETE CASCADE)", async () => {
+    await db.exec("DELETE FROM users WHERE id='u-reset'");
+    const remaining = await rows("SELECT id FROM password_reset_tokens WHERE user_id='u-reset'");
+    expect(remaining).toHaveLength(0);
   });
 });

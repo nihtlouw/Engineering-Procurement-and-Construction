@@ -386,6 +386,39 @@ Terkunci otomatis 15 menit setelah 10 kegagalan (60 menit setelah 20). ADMIN
 cukup menekan **Buka kunci** pada baris anggota — atau reset password, yang juga
 membuka kunci. Admin sendiri yang lupa password harus memakai jalur CLI.
 
+## Deploy reset password lewat email (`0011_password_reset_tokens.sql`)
+
+Migrasi menambah **satu tabel baru** `password_reset_tokens` (tanpa RLS, seperti
+`invitations`) dan dua index. Tidak ada perubahan pada tabel yang sudah berisi
+data, jadi tidak butuh backup khusus.
+
+Fitur ini menutup kekurangan S1: sebelumnya pemulihan password hanya mungkin
+bila ada ADMIN yang mengetik password baru untuk orang lain — artinya password
+selalu berpindah tangan dalam bentuk terbaca.
+
+| # | Kriteria | Cara |
+|---|---|---|
+| 1 | Rangkaian 0000–0011 tereksekusi | `npx vitest run tests/unit/migrations.test.ts` (55 test) |
+| 2 | `db:verify` melaporkan pemeriksaan 0011 | `npm run db:verify` → “0011 tabel token reset” PASS |
+| 3 | Tautan “Lupa password” muncul di halaman masuk | buka `/` → klik **Lupa password?** |
+| 4 | Permintaan email tak terdaftar tidak membocorkan apa pun | kirim `POST /api/auth/forgot-password` dengan email acak → respons sama, tidak ada email terkirim |
+| 5 | Token sekali pakai | buka tautan → isi password → buka tautan yang sama lagi → 409 `RESET_TOKEN_USED` |
+| 6 | Tautan kedaluwarsa 30 menit | `PASSWORD_RESET_TTL_MINUTES=5`, minta tautan, tunggu 6 menit → 410 `RESET_TOKEN_EXPIRED` |
+| 7 | Permintaan baru membatalkan tautan lama | minta dua kali, pakai tautan pertama → 409 `RESET_TOKEN_REVOKED` |
+| 8 | Semua sesi dicabut setelah reset | login di dua peramban → reset → peramban lain terlempar ke halaman masuk |
+| 9 | Hanya hash token yang disimpan | `select token_hash from password_reset_tokens order by created_at desc limit 1` → 64 karakter hex, bukan token asli |
+| 10 | Batas 3 permintaan/jam per akun & 10/jam per IP | ulangi permintaan → respons tetap generik, `auth_events` mencatat `RATE_LIMITED` |
+| 11 | ADMIN dapat mengirim tautan tanpa tahu password | **Pengguna & peran → Kirim tautan** → email masuk, UI tidak menampilkan password |
+| 12 | Undangan kini terkirim lewat email | undang anggota → email berisi tautan `/accept-invite?token=…` |
+| 13 | Password berubah lewat jalur lain mencabut tautan email | buat tautan, lalu ADMIN reset manual → tautan lama 409 `RESET_TOKEN_REVOKED` |
+| 14 | Build/typecheck/lint/test/audit hijau | `npm run typecheck && npm run lint && npm test && npm audit --omit=dev --audit-level=high` |
+
+**Prasyarat email di production:** `EMAIL_DRIVER=resend`, `RESEND_API_KEY`,
+`EMAIL_FROM` (domain terverifikasi), `APP_BASE_URL`. Tanpa `APP_BASE_URL`,
+aplikasi menolak membuat tautan (bukan mengirim tautan rusak) dan UI memberi tahu
+admin. Tanpa `EMAIL_DRIVER`, UI menampilkan pesan “email belum dikonfigurasi” dan
+admin tetap bisa memakai **Reset manual**.
+
 ## Variabel environment
 
 | Variabel | Wajib | Catatan |
@@ -399,6 +432,11 @@ membuka kunci. Admin sendiri yang lupa password harus memakai jalur CLI.
 | `SEED_DEMO_PASSWORD` | ⛔ | Jangan diset di production. |
 | `ALLOW_DEMO_SEED` | ⛔ | `yes` hanya di environment uji. |
 | `EPC_RLS_TEST` | ⛔ | `1` untuk menjalankan test integrasi RLS. |
+| `EMAIL_DRIVER` | ⛔ | `resend` (production), `console` (dev: isi email dicetak ke log, tidak dikirim), `none` (default). |
+| `RESEND_API_KEY` | ⛔ | Wajib bila `EMAIL_DRIVER=resend`. Buat di dashboard Resend. |
+| `EMAIL_FROM` | ⛔ | Pengirim, mis. `Ardaya EPC <no-reply@domain-anda.id>`. Domain harus terverifikasi di penyedia. |
+| `APP_BASE_URL` | ⛔ | Basis tautan email, mis. `https://epc.domain-anda.id`. Tanpa ini tautan reset/undangan tidak dibuat di production. |
+| `PASSWORD_RESET_TTL_MINUTES` | ⛔ | Masa berlaku tautan reset, default 30 (batas wajar 5–240). |
 
 ## Catatan operasional & risiko sisa
 
