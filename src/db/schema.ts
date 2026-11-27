@@ -142,19 +142,24 @@ export const projectMembers = pgTable(
 
 export const costCategories = pgTable("cost_categories", {
   id: id(),
+  /** NULL = katalog bersama yang dipakai semua company (warisan pra-S1). */
   companyId: uuid("company_id"),
-  code: text("code").notNull().unique(),
+  code: text("code").notNull(),
   name: text("name").notNull(),
   isOverhead: boolean("is_overhead").notNull().default(false),
   isActive: boolean("is_active").notNull().default(true),
-});
+  createdById: text("created_by_id").references(() => users.id),
+  createdAt: createdAt(),
+}, (table) => [uniqueIndex("cost_categories_company_code_idx").on(table.companyId, table.code)]);
 
 export const units = pgTable("units", {
   id: id(),
   companyId: uuid("company_id"),
-  code: text("code").notNull().unique(),
+  code: text("code").notNull(),
   name: text("name").notNull(),
-});
+  createdById: text("created_by_id").references(() => users.id),
+  createdAt: createdAt(),
+}, (table) => [uniqueIndex("units_company_code_idx").on(table.companyId, table.code)]);
 
 export const budgetVersions = pgTable(
   "budget_versions",
@@ -220,7 +225,12 @@ export const contractTerms = pgTable("contract_terms", {
   invoicedAmount: money("invoiced_amount"),
   status: text("status").notNull().default("OPEN"),
   isAutoAmount: boolean("is_auto_amount").notNull().default(true),
-});
+  notes: text("notes"),
+}, (table) => [
+  // 0007: urutan termin unik per proyek (UI menyimpan daftar sekaligus).
+  uniqueIndex("contract_terms_project_sort_idx").on(table.companyId, table.projectId, table.sortOrder),
+  index("contract_terms_project_idx").on(table.companyId, table.projectId, table.type),
+]);
 
 export const purchaseRecords = pgTable("purchase_records", {
   id: id(),

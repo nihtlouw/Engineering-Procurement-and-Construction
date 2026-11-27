@@ -4,7 +4,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { beforeAll, afterAll, describe, expect, it } from "vitest";
 
 /**
- * Uji SELURUH migrasi (0000 → 0006) dari database kosong TANPA server
+ * Uji SELURUH migrasi (0000 → 0007) dari database kosong TANPA server
  * Postgres eksternal. PGlite = Postgres (WASM) in-process. Baseline di bawah
  * meniru skema 28 tabel pra-S1; bukan pengganti `npm run db:verify` pada DB nyata.
  */
@@ -118,7 +118,7 @@ INSERT INTO customer_invoices (id,project_id,contract_term_id,number,type,total_
   await db.exec(ddl);
 
   const dir = path.resolve(process.cwd(), "drizzle");
-  for (const file of ["0000_tenant_foundation.sql", "0001_rls_policies.sql", "0002_s2a_budgeting_ptk.sql", "0003_s2b_po_terms_co.sql", "0004_s3_field_photos.sql", "0005_hardening_invoice_notifications.sql", "0006_master_data_codes.sql"]) {
+  for (const file of ["0000_tenant_foundation.sql", "0001_rls_policies.sql", "0002_s2a_budgeting_ptk.sql", "0003_s2b_po_terms_co.sql", "0004_s3_field_photos.sql", "0005_hardening_invoice_notifications.sql", "0006_master_data_codes.sql", "0007_terms_catalog.sql"]) {
     await db.exec(readFileSync(path.join(dir, file), "utf8"));
   }
   // PGlite default = superuser (BYPASSRLS). Neon/Supabase memakai role non-superuser.
@@ -480,5 +480,77 @@ describe("migrasi 0006 · kode master data per company", () => {
     expect(indexes.map((r) => r.indexname)).toEqual([
       "clients_company_code_idx", "opportunities_company_code_idx", "projects_company_code_idx",
     ]);
+  });
+});
+
+describe("migrasi 0007 · termin kontrak & katalog per company", () => {
+  it("urutan termin unik per proyek, tapi proyek lain boleh memakai urutan yang sama", async () => {
+    const defaultCompany = await defaultScope();
+    await scope(defaultCompany, "invoice.edit");
+    // term-1 sudah menempati sort_order 0 pada p1.
+    await expect(db.exec(`INSERT INTO contract_terms (id,project_id,type,name,amount,sort_order)
+      VALUES ('term-dup','p1','DP','Duplikat',10,0)`)).rejects.toThrow();
+
+    await db.exec("INSERT INTO clients (id,code,legal_name,display_name,industry) VALUES ('c7','C7','PT Tujuh','Tujuh','Retail');");
+    await db.exec(`INSERT INTO projects (id,code,title,client_id,stage,contract_value) VALUES ('p7','PRJ-7','Proyek Tujuh','c7','IN_PROGRESS',1000);`);
+    await db.exec(`INSERT INTO contract_terms (id,project_id,type,name,percent,amount,sort_order,notes)
+      VALUES ('term-7','p7','DP','Uang muka',30,300,0,'BA uang muka')`);
+    const [term] = await rows("SELECT notes, status FROM contract_terms WHERE id='term-7'");
+    expect(term.notes).toBe("BA uang muka");
+    expect(term.status).toBe("OPEN");
+  });
+
+  it("persen 30+20+40+10 = 100 menghasilkan tiga status termin yang benar", async () => {
+    const defaultCompany = await defaultScope();
+    await scope(defaultCompany, "invoice.edit");
+    await db.exec(`INSERT INTO contract_terms (id,project_id,type,name,percent,amount,sort_order)
+      VALUES ('term-7b','p7','PROGRESS','Progres',40,400,1),
+             ('term-7c','p7','RETENTION','Retensi',10,100,2)`);
+    const saved = await rows("SELECT id, status FROM contract_terms WHERE project_id='p7' ORDER BY sort_order");
+    expect(saved.map((r) => r.status)).toEqual(["OPEN", "OPEN", "OPEN"]);
+  });
+
+  it("status CLOSED tidak ditimpa trigger saat nominal diubah", async () => {
+    const defaultCompany = await defaultScope();
+    await scope(defaultCompany, "invoice.edit");
+    await db.exec("UPDATE contract_terms SET status='CLOSED' WHERE id='term-7'");
+    await db.exec("UPDATE contract_terms SET amount=350 WHERE id='term-7'");
+    const [term] = await rows("SELECT status FROM contract_terms WHERE id='term-7'");
+    expect(term.status).toBe("CLOSED");
+  });
+
+  it("UNIQUE global kode katalog dilepas: dua company boleh memakai kode kategori yang sama", async () => {
+    const defaultCompany = await defaultScope();
+    let [other] = await rows("SELECT id FROM companies WHERE slug='other'");
+    if (!other) {
+      await db.exec("INSERT INTO companies (slug,name,legal_name) VALUES ('other','Other','Other');");
+      [other] = await rows("SELECT id FROM companies WHERE slug='other'");
+    }
+    await db.exec(`INSERT INTO cost_categories (id,company_id,code,name,created_by_id)
+      VALUES ('cat-default','${defaultCompany}','MAT','Material','u-admin')`);
+    await db.exec(`INSERT INTO cost_categories (id,company_id,code,name,created_by_id)
+      VALUES ('cat-other','${other.id}','MAT','Material lain','u-admin')`);
+    // Katalog bersama (company_id NULL) tetap boleh dipakai semua company.
+    await db.exec(`INSERT INTO cost_categories (id,company_id,code,name,created_by_id)
+      VALUES ('cat-default-2','${defaultCompany}','CIV','Sipil company',NULL)`);
+    await expect(db.exec(`INSERT INTO cost_categories (id,company_id,code,name)
+      VALUES ('cat-default-3','${defaultCompany}','MAT','Duplikat')`)).rejects.toThrow();
+  });
+
+  it("index unik parsial + kolom baru tersedia pada units", async () => {
+    const indexes = await rows(`SELECT indexname FROM pg_indexes
+      WHERE schemaname='public' AND indexname IN
+        ('contract_terms_project_sort_idx','contract_terms_project_idx',
+         'cost_categories_company_code_idx','units_company_code_idx')
+      ORDER BY indexname`);
+    expect(indexes.map((r) => r.indexname)).toEqual([
+      "contract_terms_project_idx", "contract_terms_project_sort_idx",
+      "cost_categories_company_code_idx", "units_company_code_idx",
+    ]);
+    const columns = await rows(`SELECT column_name FROM information_schema.columns
+      WHERE table_schema='public' AND table_name='units'
+        AND column_name IN ('created_by_id','created_at') ORDER BY column_name`);
+    expect(columns.map((r) => r.column_name)).toEqual(["created_at", "created_by_id"]);
+    await scope(await defaultScope(), "budget.internal.view,budget.client.view,document.view");
   });
 });

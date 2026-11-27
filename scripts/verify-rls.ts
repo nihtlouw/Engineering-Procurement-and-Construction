@@ -122,6 +122,22 @@ async function main() {
       codeIndexCount === 3
         ? "clients/opportunities/projects unik per company"
         : `${codeIndexCount}/3 index unik (company_id, code) ada — jalankan migrasi 0006`);
+
+    // 11. Invariant 0007: termin tersusun unik per proyek + katalog per company.
+    const catalogIndexes = await db.query(`SELECT indexname FROM pg_indexes
+      WHERE schemaname='public' AND indexname = ANY($1::text[])`,
+      [[
+        "contract_terms_project_sort_idx", "cost_categories_company_code_idx", "units_company_code_idx",
+      ]]);
+    const catalogIndexCount = catalogIndexes.rowCount ?? 0;
+    check("0007 termin & katalog", catalogIndexCount === 3,
+      catalogIndexCount === 3
+        ? "urutan termin unik per proyek, kode kategori/satuan unik per company"
+        : `${catalogIndexCount}/3 index migrasi 0007 ada — jalankan migrasi 0007`);
+    const termNotes = await db.query(`SELECT count(*)::int AS n FROM information_schema.columns
+      WHERE table_schema='public' AND table_name='contract_terms' AND column_name='notes'`);
+    check("0007 contract_terms.notes", Number(termNotes.rows[0].n) === 1,
+      Number(termNotes.rows[0].n) === 1 ? "catatan termin tersedia" : "kolom belum ada — jalankan migrasi 0007");
   } finally {
     // Bersihkan data uji.
     try {

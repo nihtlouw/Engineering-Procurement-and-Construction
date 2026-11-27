@@ -1,18 +1,21 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
-  activityLogs, clients, companySettings, memberships, projectMembers, projects, sites, users,
+  activityLogs, budgetLines, clients, companySettings, contractTerms, costCategories, customerInvoices,
+  expenseLines, memberships, projectMembers, projects, sites, units, users,
 } from "@/db/schema";
 import { ApiError, hasPermission } from "@/lib/auth";
 import type { Permission, SessionUser } from "@/lib/domain";
 import { todayJakarta } from "@/lib/format";
-import { newId } from "@/lib/server-services";
+import { D, money } from "@/lib/format";
+import { newId, requiredReason, requireProject } from "@/lib/server-services";
 import {
-  buildClientCode, buildProjectCode, CLIENT_CODE_PATTERN, INITIAL_STAGE,
-  maxSequence, PROJECT_SEQ_PATTERN,
+  assertSingleRetention, buildClientCode, buildProjectCode, CLIENT_CODE_PATTERN, INITIAL_STAGE,
+  maxSequence, PROJECT_SEQ_PATTERN, summarizeTermComposition,
 } from "@/modules/master-data/types";
 import type {
-  ClientInput, ProjectInput, ProjectMemberInput, ProjectUpdateInput, SiteInput,
+  ClientInput, ContractTermInput, CostCategoryInput, ProjectInput, ProjectMemberInput,
+  ProjectUpdateInput, SiteInput, UnitInput,
 } from "@/modules/master-data/validation";
 
 /* Semua fungsi berjalan DI DALAM withCompany(): `db` = transaksi berskope
@@ -348,4 +351,271 @@ export async function listProjectMembers(projectIds: string[]) {
   }).from(projectMembers)
     .innerJoin(users, eq(users.id, projectMembers.userId))
     .where(inArray(projectMembers.projectId, projectIds));
+}
+
+/* -------------------------------------------------------------------------- */
+/* Tahap 3 · termin kontrak                                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Menyimpan daftar termin proyek secara menyeluruh (replace-by-set).
+ *
+ * Alasan replace, bukan CRUD per baris: komposisi termin adalah SATU kesatuan
+ * (persen harus berjumlah 100%), sehingga validasi dan penulisan harus atomik.
+ * Baris yang sudah punya tagihan (`invoiced_amount > 0`) TIDAK dihapus — bila
+ * dihapus, invoice lama akan kehilangan terminnya dan kumulatif tagihan salah.
+ */
+/**
+ * Termin adalah komitmen komersial: dimiliki tim invoice (`invoice.edit`,
+ * FINANCE/ADMIN) atau pihak yang menyetujui RAB klien (`budget.approve`, PM/ADMIN).
+ * Keduanya tetap wajib menjadi anggota proyek lewat `requireProject()`.
+ */
+function canManageTerms(user: SessionUser) {
+  return hasPermission(user, "invoice.edit") || hasPermission(user, "budget.approve");
+}
+
+export async function saveContractTerms(user: SessionUser, projectId: string, terms: ContractTermInput[]) {
+  await requireProject(user, projectId);
+  if (!canManageTerms(user)) {
+    throw new ApiError("FORBIDDEN", "Izin invoice.edit atau budget.approve diperlukan untuk mengubah termin.", 403);
+  }
+  const [project] = await db.select().from(projects).where(eq(projects.id, projectId)).limit(1);
+  if (!project) throw new ApiError("NOT_FOUND", "Proyek tidak ditemukan.", 404);
+  if (project.isLocked && user.companyRole !== "ADMIN") {
+    throw new ApiError("PROJECT_LOCKED", "Proyek COMPLETED terkunci. Hanya ADMIN yang dapat mengubah termin.", 409);
+  }
+
+  const retentionError = assertSingleRetention(terms);
+  if (retentionError) throw new ApiError("RETENTION_DUPLICATE", retentionError, 422);
+  const composition = summarizeTermComposition(terms.map((t) => ({ percent: t.percent ?? null, type: t.type })));
+  if (composition.warning) {
+    throw new ApiError("TERM_PERCENT_TOTAL", composition.warning, 422, composition);
+  }
+
+  const existing = await db.select().from(contractTerms).where(eq(contractTerms.projectId, projectId));
+  const invoicedIds = new Set(existing.filter((t) => D(t.invoicedAmount ?? 0).gt(0)).map((t) => t.id));
+  const incomingIds = new Set(terms.map((t) => t.id).filter((id): id is string => !!id));
+
+  // Termin yang sudah ditagihkan tidak boleh hilang dari daftar.
+  const detached = [...invoicedIds].filter((id) => !incomingIds.has(id));
+  if (detached.length) {
+    throw new ApiError(
+      "TERM_HAS_INVOICES",
+      `${detached.length} termin sudah memiliki tagihan dan tidak boleh dihapus. Tandai CLOSED atau pertahankan barisnya.`,
+      409,
+      { termIds: detached },
+    );
+  }
+
+  // `contract_terms_project_sort_idx` unik per (company, project, sort_order),
+  // jadi penyimpanan replace-by-set harus lewat slot sementara: geser semua baris
+  // lama ke luar rentang (maks 40 termin), lalu tulis urutan final. Semua di dalam
+  // satu transaksi, sehingga aman saat urutan ditukar atau baris dihapus.
+  if (existing.length) {
+    await db.update(contractTerms)
+      .set({ sortOrder: sql`${contractTerms.sortOrder} + 1000` })
+      .where(eq(contractTerms.projectId, projectId));
+  }
+
+  const contractValue = D(project.contractValueCurrent ?? project.contractValue ?? 0);
+  const changes: { field: string; old: unknown; new: unknown }[] = [];
+  const seen = new Set<string>();
+  for (const [index, term] of terms.entries()) {
+    const percent = term.percent ?? null;
+    const autoAmount = percent !== null;
+    const amount = autoAmount
+      ? percentToAmount(contractValue, percent)
+      : money(term.amount ?? "0");
+    const invoiceSum = existing.find((t) => t.id === term.id)?.invoicedAmount ?? "0";
+    if (autoAmount && D(amount).lt(D(invoiceSum))) {
+      throw new ApiError(
+        "TERM_BELOW_INVOICED",
+        `Termin "${term.name}": nilai baru ${money(amount)} lebih kecil dari tagihan yang sudah ada ${money(invoiceSum)}.`,
+        422,
+      );
+    }
+    const row = {
+      projectId, type: term.type, name: term.name.trim(), percent: percent ?? null,
+      amount, trigger: term.trigger ?? null, targetDate: term.targetDate || null,
+      sortOrder: index, notes: term.notes ?? null, isAutoAmount: autoAmount,
+    };
+    if (term.id && existing.some((t) => t.id === term.id)) {
+      const old = existing.find((t) => t.id === term.id)!;
+      await db.update(contractTerms).set(row).where(eq(contractTerms.id, term.id));
+      if (old.amount !== row.amount || old.name !== row.name || old.percent !== row.percent) {
+        changes.push({ field: `term:${old.name}`, old: { amount: old.amount, percent: old.percent }, new: { amount: row.amount, percent: row.percent } });
+      }
+      seen.add(term.id);
+    } else {
+      const id = newId();
+      await db.insert(contractTerms).values({ id, ...row });
+      changes.push({ field: `term:${row.name}`, old: null, new: { amount: row.amount, percent: row.percent, type: row.type } });
+      seen.add(id);
+    }
+  }
+
+  // Hapus hanya termin tanpa tagihan yang memang tidak dikirim lagi.
+  const removals = existing.filter((t) => !seen.has(t.id) && !invoicedIds.has(t.id));
+  for (const removal of removals) {
+    await db.delete(contractTerms).where(eq(contractTerms.id, removal.id));
+    changes.push({ field: `term:${removal.name}`, old: { amount: removal.amount }, new: null });
+  }
+
+  await log({
+    actorId: user.id, objectType: "CONTRACT_TERM", objectId: projectId, projectId, action: "TERMS_SAVED",
+    changes, reason: `Total persen ${composition.totalPercent.toFixed(2)}%`,
+  });
+  return {
+    count: terms.length, removed: removals.length, changed: changes.length,
+    totalPercent: composition.totalPercent,
+  };
+}
+
+function percentToAmount(contractValue: ReturnType<typeof D>, percent: string) {
+  return money(contractValue.times(D(percent)).div(100));
+}
+
+export async function closeContractTerm(user: SessionUser, projectId: string, termId: string, reason: string) {
+  await requireProject(user, projectId);
+  if (!canManageTerms(user)) {
+    throw new ApiError("FORBIDDEN", "Izin invoice.edit atau budget.approve diperlukan untuk menutup termin.", 403);
+  }
+  const [term] = await db.select().from(contractTerms)
+    .where(and(eq(contractTerms.id, termId), eq(contractTerms.projectId, projectId))).limit(1);
+  if (!term) throw new ApiError("NOT_FOUND", "Termin tidak ditemukan pada proyek ini.", 404);
+  if (term.status === "CLOSED") return { id: termId, status: "CLOSED", changed: false };
+  requiredReason(reason, "Alasan penutupan termin");
+  await db.update(contractTerms).set({ status: "CLOSED" }).where(eq(contractTerms.id, termId));
+  await log({
+    actorId: user.id, objectType: "CONTRACT_TERM", objectId: termId, projectId, action: "CLOSED", reason,
+    changes: [{ field: "status", old: term.status, new: "CLOSED" }],
+  });
+  return { id: termId, status: "CLOSED", changed: true };
+}
+
+/** Ringkasan termin untuk UI: butuh izin klien (invoice.view) agar tidak bocor ke FIELD. */
+export async function listContractTerms(user: SessionUser, projectId: string) {
+  await requireProject(user, projectId);
+  const terms = await db.select().from(contractTerms).where(eq(contractTerms.projectId, projectId));
+  const invoices = await db.select({
+    id: customerInvoices.id, contractTermId: customerInvoices.contractTermId,
+    totalAmount: customerInvoices.totalAmount, status: customerInvoices.status,
+  }).from(customerInvoices).where(eq(customerInvoices.projectId, projectId));
+  return terms
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((term) => ({
+      ...term,
+      invoiceCount: invoices.filter((i) => i.contractTermId === term.id && i.status !== "CANCELLED").length,
+    }));
+}
+
+/* -------------------------------------------------------------------------- */
+/* Tahap 3 · katalog kategori biaya & satuan                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Katalog bersifat GLOBAL + per company:
+ *  - baris `company_id IS NULL` = katalog bersama (warisan pra-S1) → read-only di UI.
+ *  - baris milik company aktif → boleh diubah selama belum dipakai transaksi.
+ */
+function assertCatalogManage(user: SessionUser) {
+  // Mengubah katalog berdampak ke seluruh modul biaya, jadi hanya pengelola
+  // pengaturan & budget internal (ADMIN/FINANCE) yang boleh menulis.
+  if (!hasPermission(user, "settings.manage") && !hasPermission(user, "budget.edit")) {
+    throw new ApiError("FORBIDDEN", "Izin settings.manage atau budget.edit diperlukan untuk mengubah katalog biaya.", 403);
+  }
+}
+
+/**
+ * `cost_categories`/`units` sengaja TANPA RLS (lihat 0001), jadi filter company
+ * harus eksplisit: baris bersama (company_id NULL) + baris milik company aktif.
+ */
+export async function listCatalog(user: SessionUser) {
+  const visibleCategory = or(isNull(costCategories.companyId), eq(costCategories.companyId, user.companyId));
+  const visibleUnit = or(isNull(units.companyId), eq(units.companyId, user.companyId));
+  const [categories, unitRows] = await Promise.all([
+    db.select().from(costCategories).where(visibleCategory),
+    db.select().from(units).where(visibleUnit),
+  ]);
+  const usedCategoryIds = new Set(
+    (await db.select({ id: budgetLines.costCategoryId }).from(budgetLines)).map((r) => r.id),
+  );
+  const usedUnitCodes = new Set([
+    ...(await db.select({ code: budgetLines.unitCode }).from(budgetLines)).map((r) => r.code),
+    ...(await db.select({ code: expenseLines.unitCode }).from(expenseLines)).map((r) => r.code),
+  ]);
+  return {
+    categories: categories
+      .sort((a, b) => Number(a.companyId === null) - Number(b.companyId === null) || a.code.localeCompare(b.code))
+      .map((c) => ({ ...c, shared: c.companyId === null, used: usedCategoryIds.has(c.id) })),
+    units: unitRows
+      .sort((a, b) => Number(a.companyId === null) - Number(b.companyId === null) || a.code.localeCompare(b.code))
+      .map((u) => ({ ...u, shared: u.companyId === null, used: usedUnitCodes.has(u.code) })),
+  };
+}
+
+export async function createCostCategory(user: SessionUser, input: CostCategoryInput) {
+  assertCatalogManage(user);
+  const [duplicate] = await db.select({ id: costCategories.id }).from(costCategories)
+    .where(and(eq(costCategories.code, input.code), eq(costCategories.companyId, user.companyId))).limit(1);
+  if (duplicate) throw new ApiError("DUPLICATE_CODE", `Kode kategori ${input.code} sudah dipakai company ini.`, 409);
+  const id = newId();
+  await db.insert(costCategories).values({
+    id, companyId: user.companyId, code: input.code, name: input.name.trim(),
+    isOverhead: input.isOverhead ?? false, isActive: input.isActive ?? true, createdById: user.id,
+  });
+  await log({
+    actorId: user.id, objectType: "COST_CATEGORY", objectId: id, action: "CREATED",
+    changes: [{ field: "code", old: null, new: input.code }, { field: "name", old: null, new: input.name }],
+  });
+  return { id, code: input.code };
+}
+
+export async function updateCostCategory(user: SessionUser, id: string, input: CostCategoryInput) {
+  assertCatalogManage(user);
+  const [existing] = await db.select().from(costCategories).where(eq(costCategories.id, id)).limit(1);
+  if (!existing) throw new ApiError("NOT_FOUND", "Kategori tidak ditemukan.", 404);
+  if (existing.companyId === null) throw new ApiError("SHARED_CATALOG_READONLY", "Katalog bersama tidak dapat diubah. Buat kategori company sendiri.", 409);
+  if (existing.companyId !== user.companyId) throw new ApiError("NOT_FOUND", "Kategori tidak ditemukan pada company ini.", 404);
+  if (input.code !== existing.code) {
+    const used = await db.select({ id: budgetLines.id }).from(budgetLines).where(eq(budgetLines.costCategoryId, id)).limit(1);
+    if (used.length) throw new ApiError("CATEGORY_IN_USE", "Kode kategori tidak dapat diubah karena sudah dipakai pos RAB.", 409);
+  }
+  const next = { code: input.code, name: input.name.trim(), isOverhead: input.isOverhead ?? existing.isOverhead, isActive: input.isActive ?? existing.isActive };
+  await db.update(costCategories).set(next).where(eq(costCategories.id, id));
+  await log({
+    actorId: user.id, objectType: "COST_CATEGORY", objectId: id, action: "UPDATED",
+    changes: Object.entries(next).filter(([field, value]) => String((existing as Record<string, unknown>)[field]) !== String(value))
+      .map(([field, value]) => ({ field, old: (existing as Record<string, unknown>)[field], new: value })),
+  });
+  return { id };
+}
+
+export async function createUnit(user: SessionUser, input: UnitInput) {
+  assertCatalogManage(user);
+  const [duplicate] = await db.select({ id: units.id }).from(units)
+    .where(and(eq(units.code, input.code), eq(units.companyId, user.companyId))).limit(1);
+  if (duplicate) throw new ApiError("DUPLICATE_CODE", `Satuan ${input.code} sudah dipakai company ini.`, 409);
+  const id = newId();
+  await db.insert(units).values({ id, companyId: user.companyId, code: input.code, name: input.name.trim(), createdById: user.id });
+  await log({
+    actorId: user.id, objectType: "UNIT", objectId: id, action: "CREATED",
+    changes: [{ field: "code", old: null, new: input.code }, { field: "name", old: null, new: input.name }],
+  });
+  return { id, code: input.code };
+}
+
+export async function updateUnit(user: SessionUser, id: string, input: UnitInput) {
+  assertCatalogManage(user);
+  const [existing] = await db.select().from(units).where(eq(units.id, id)).limit(1);
+  if (!existing) throw new ApiError("NOT_FOUND", "Satuan tidak ditemukan.", 404);
+  if (existing.companyId === null) throw new ApiError("SHARED_CATALOG_READONLY", "Katalog bersama tidak dapat diubah. Buat satuan company sendiri.", 409);
+  if (existing.companyId !== user.companyId) throw new ApiError("NOT_FOUND", "Satuan tidak ditemukan pada company ini.", 404);
+  if (input.code !== existing.code) throw new ApiError("CODE_IMMUTABLE", "Kode satuan tidak dapat diubah karena dipakai pada pos/nota lama.", 409);
+  await db.update(units).set({ name: input.name.trim() }).where(eq(units.id, id));
+  await log({
+    actorId: user.id, objectType: "UNIT", objectId: id, action: "UPDATED",
+    changes: [{ field: "name", old: existing.name, new: input.name }],
+  });
+  return { id };
 }

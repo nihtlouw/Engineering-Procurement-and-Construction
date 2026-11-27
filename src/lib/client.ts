@@ -84,3 +84,55 @@ export const updateSiteRecord = (siteId: string, body: Record<string, unknown>) 
 
 export const createProjectRecord = (body: Record<string, unknown>) =>
   api<{ id: string; code: string; stage: string; members: number }>("/api/projects", { method: "POST", body: JSON.stringify(body) });
+
+/* -------------------------------------------------------------------------- */
+/* Tahap 3 · termin kontrak & katalog biaya                                   */
+/* -------------------------------------------------------------------------- */
+
+export type ContractTermView = {
+  id: string; projectId: string; type: string; name: string; percent: string | null;
+  amount: string; trigger: string | null; targetDate: string | null; sortOrder: number;
+  invoicedAmount: string; status: string; isAutoAmount: boolean; notes: string | null;
+  invoiceCount: number;
+};
+
+export type ContractTermPayload = {
+  id?: string | null; type: string; name: string; percent?: string | null;
+  amount?: string | null; trigger?: string | null; targetDate?: string | null; notes?: string | null;
+};
+
+export const fetchContractTerms = (projectId: string) =>
+  api<ContractTermView[]>(`/api/projects/${projectId}/terms`);
+
+export const saveContractTerms = (projectId: string, terms: ContractTermPayload[]) =>
+  api<{ count: number; removed: number; changed: number; totalPercent: number }>(
+    `/api/projects/${projectId}/terms`,
+    { method: "PUT", body: JSON.stringify({ terms }) },
+  );
+
+export const closeContractTerm = (projectId: string, termId: string, reason: string) =>
+  api<{ id: string; status: string; changed: boolean }>(
+    `/api/projects/${projectId}/terms/${termId}`,
+    { method: "POST", body: JSON.stringify({ action: "CLOSE", reason }) },
+  );
+
+export type CatalogCategory = {
+  id: string; companyId: string | null; code: string; name: string;
+  isOverhead: boolean; isActive: boolean; shared: boolean; used: boolean;
+};
+
+export type CatalogUnit = { id: string; companyId: string | null; code: string; name: string; shared: boolean; used: boolean };
+
+export const fetchCatalog = () => api<{ categories: CatalogCategory[]; units: CatalogUnit[] }>("/api/catalog/categories");
+
+export const createCostCategory = (body: Record<string, unknown>) =>
+  api<{ id: string; code: string }>("/api/catalog/categories", { method: "POST", body: JSON.stringify(body) });
+
+export const updateCostCategory = (id: string, body: Record<string, unknown>) =>
+  api<{ id: string }>(`/api/catalog/categories/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+
+export const createUnitRecord = (body: Record<string, unknown>) =>
+  api<{ id: string; code: string }>("/api/catalog/units", { method: "POST", body: JSON.stringify(body) });
+
+export const updateUnitRecord = (id: string, body: Record<string, unknown>) =>
+  api<{ id: string }>(`/api/catalog/units/${id}`, { method: "PATCH", body: JSON.stringify(body) });

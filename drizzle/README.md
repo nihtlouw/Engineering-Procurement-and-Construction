@@ -11,6 +11,7 @@ Migrasi SQL **berversi dan wajib** — `drizzle-kit push` hanya untuk percobaan 
 | `0004_s3_field_photos.sql` | S3: `file_objects.content_base64` nullable + metadata storage, tabel `field_photos` / `document_photo_links`, composite company FK, trigger kesamaan proyek, dan `FORCE RLS` pada 2 tabel baru |
 | `0005_hardening_invoice_notifications.sql` | Hardening-1: `customer_invoices.created_by_id` (+ backfill dari `activity_logs`), `app_current_user_id()`, dan 2 policy **RESTRICTIVE** pada `notifications` (SELECT/UPDATE hanya milik `user_id` sesi) |
 | `0006_master_data_codes.sql` | Master data: UNIQUE global `clients/opportunities/projects.code` diganti UNIQUE `(company_id, code)`, index `sites_client_idx` |
+| `0007_terms_catalog.sql` | Termin & katalog: `contract_terms.notes`, UNIQUE `(company_id, project_id, sort_order)`, index `(company_id, project_id, type)`, trigger status dipertahankan, UNIQUE global `cost_categories.code`/`units.code` diganti UNIQUE parsial `(company_id, code) WHERE company_id IS NOT NULL`, plus `created_by_id`/`created_at` |
 
 ## Perintah
 
@@ -39,6 +40,7 @@ SELECT set_config('app.current_company_id', '<uuid>', true);  -- true = SET LOCA
 - 0005 menambah GUC ketiga: `app.current_user_id`, juga `SET LOCAL` di transaksi yang sama. Tanpa itu policy RESTRICTIVE `notifications` fail-closed (0 notifikasi).
 - S2a menambah GUC kedua: `app.current_permissions` (daftar izin dipisah koma), juga `SET LOCAL` di transaksi yang sama. Tanpa itu policy RESTRICTIVE RAB internal bersifat **fail-closed** (0 baris). S2b memakai GUC yang sama untuk `app_has_permission('invoice.approve')` pada trigger anti double-invoice; SQL manual tanpa GUC tidak dapat meloloskan over-invoice.
 - Setelah `0006`, kode `clients` / `opportunities` / `projects` unik **per company**, bukan global.
+- Setelah `0007`, kode `cost_categories` / `units` unik **per company**; baris `company_id IS NULL` = katalog bersama yang tetap read-only di UI.
 - Setelah `0005`, total tabel bisnis ber-RLS = **30** dengan **124 policy** (120 isolasi + 2 RESTRICTIVE RAB internal + 2 RESTRICTIVE notifikasi). Backfill `0003` berjalan per company di bawah FORCE RLS, lalu GUC di-reset agar koneksi migrasi tidak mewarisi scope. Foto baru S3 tidak memakai `content_base64`; file lama/PDF final tetap provider `DB`.
 
 ## Yang sengaja TIDAK di-RLS (S1)

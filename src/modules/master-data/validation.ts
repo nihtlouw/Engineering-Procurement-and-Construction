@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CODE_PATTERN, PROJECT_ROLES } from "@/modules/master-data/types";
+import { CODE_PATTERN, PROJECT_ROLES, TERM_TYPES } from "@/modules/master-data/types";
 
 /** Satu sumber kebenaran validasi master data, dipakai UI & server. */
 
@@ -94,3 +94,66 @@ export const projectMemberSchema = z.object({
   projectRole: z.enum(PROJECT_ROLES),
 });
 export type ProjectMemberInput = z.infer<typeof projectMemberSchema>;
+
+/* -------------------------------------------------------------------------- */
+/* Tahap 3 · termin kontrak                                                   */
+/* -------------------------------------------------------------------------- */
+
+const percentValue = (label: string) =>
+  z.string().trim().refine((v) => /^\d{1,3}(\.\d{1,2})?$/.test(v) && Number(v) > 0 && Number(v) <= 100, {
+    message: `${label} harus 0,01–100 dengan maksimal 2 desimal.`,
+  });
+
+export const contractTermSchema = z.object({
+  /** ID baris lama (bila mengubah); kosong = termin baru. */
+  id: z.string().min(1).nullable().optional(),
+  type: z.enum(TERM_TYPES),
+  name: z.string().trim().min(2, "Nama termin minimal 2 karakter.").max(120),
+  /** Persen dari nilai kontrak berjalan; wajib bila mode persen. */
+  percent: percentValue("Persen termin").nullable().optional(),
+  /** Nominal manual; wajib bila `percent` kosong. */
+  amount: amount("Nominal termin").nullable().optional(),
+  trigger: optionalText(160),
+  targetDate: isoDate("Target tanggal").nullable().optional(),
+  notes: optionalText(300),
+}).refine((v) => v.percent != null || v.amount != null, {
+  message: "Isi persen termin atau nominal manual.",
+  path: ["percent"],
+}).refine((v) => !v.targetDate || v.targetDate >= "2000-01-01", {
+  message: "Target tanggal tidak valid.", path: ["targetDate"],
+});
+export type ContractTermInput = z.infer<typeof contractTermSchema>;
+
+export const saveTermsSchema = z.object({
+  terms: z.array(contractTermSchema).max(40, "Maksimal 40 termin per proyek."),
+});
+export type SaveTermsInput = z.infer<typeof saveTermsSchema>;
+
+export const closeTermSchema = z.object({
+  action: z.literal("CLOSE"),
+  reason: z.string().trim().min(5, "Alasan penutupan minimal 5 karakter."),
+});
+
+/* -------------------------------------------------------------------------- */
+/* Tahap 3 · katalog biaya                                                    */
+/* -------------------------------------------------------------------------- */
+
+export const costCategorySchema = z.object({
+  // Normalisasi huruf besar SEBELUM validasi (pola sama dengan `code()`), dan
+  // kode minimal 2 karakter agar tidak bentrok dengan kode katalog warisan.
+  code: z.string().trim().toUpperCase().regex(/^[A-Z0-9][A-Z0-9._-]{1,23}$/, {
+    message: "Kode kategori 2–24 karakter: huruf besar, angka, titik, garis bawah, atau strip.",
+  }),
+  name: z.string().trim().min(2, "Nama kategori minimal 2 karakter.").max(120),
+  isOverhead: z.boolean().optional(),
+  isActive: z.boolean().optional(),
+});
+export type CostCategoryInput = z.infer<typeof costCategorySchema>;
+
+export const unitSchema = z.object({
+  code: z.string().trim().regex(/^[A-Za-z][A-Za-z0-9./_-]{0,11}$/, {
+    message: "Kode satuan 1–12 karakter, diawali huruf (mis. m2, kg, Ls, titik).",
+  }),
+  name: z.string().trim().min(2, "Nama satuan minimal 2 karakter.").max(80),
+});
+export type UnitInput = z.infer<typeof unitSchema>;

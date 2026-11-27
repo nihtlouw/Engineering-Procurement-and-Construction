@@ -4,7 +4,7 @@
 
 1. **Backup** database produksi (snapshot + uji restore). Migrasi S1 menambah kolom `NOT NULL` + backfill; tidak ada down script.
 2. Set environment di Vercel: `DATABASE_URL`, `FILE_SIGNING_SECRET` (≥ 32 char acak), dan untuk S3 `FILE_STORAGE_DRIVER=s3` + kredensial bucket privat. Pastikan `SEED_DEMO_PASSWORD` **tidak** diset di production.
-3. Jalankan migrasi dari mesin yang punya akses DB (bukan dari Vercel runtime). Runner otomatis menerapkan `0000 → 0001 → 0002 → 0003 → 0004 → 0005 → 0006`:
+3. Jalankan migrasi dari mesin yang punya akses DB (bukan dari Vercel runtime). Runner otomatis menerapkan `0000 → 0007`:
    ```bash
    npm ci
    cp .env.example .env.local   # isi DATABASE_URL produksi
@@ -135,6 +135,32 @@ Backup tetap dianjurkan (DDL pada tabel inti).
 
 Rincian: [`docs/modules/MASTER-DATA.md`](../modules/MASTER-DATA.md).
 
+## Deploy termin & katalog (`0007_terms_catalog.sql`)
+
+Migrasi **forward-only** dan non-destruktif: menambah `contract_terms.notes`, satu
+UNIQUE + satu index pada `contract_terms`, melepas UNIQUE global `cost_categories.code` /
+`units.code` menjadi UNIQUE parsial `(company_id, code)`, serta menambah
+`created_by_id`/`created_at` pada kedua tabel katalog. Tidak ada backfill data.
+Backup tetap dianjurkan karena ada DDL pada tabel biaya.
+
+Urutan: backup → `npm run db:migrate -- --check` → `npm run db:migrate` → `npm run db:verify` → deploy aplikasi → smoke test tab **Master Data → Termin** dan **Katalog**.
+
+| # | Kriteria termin & katalog | Cara |
+|---|---|---|
+| 1 | Rangkaian 0000–0007 tereksekusi (30 tabel FORCE RLS, 124 policy, 6 index baru) | `npm test -- tests/unit/migrations.test.ts` (37 test) |
+| 2 | Urutan termin unik per proyek; proyek lain boleh memakai urutan sama | test migrasi 0007 |
+| 3 | Komposisi persen harus 100% (±0,01); campuran persen & nominal diizinkan | `npm test -- tests/unit/terms-catalog.test.ts` |
+| 4 | PM (tanpa `invoice.edit`) tetap bisa menyusun termin; FIELD tidak | UAT: login PM → tab Termin bisa disimpan; login FIELD → read-only |
+| 5 | Termin yang sudah ditagihkan tidak bisa dihapus (`TERM_HAS_INVOICES`) & tidak bisa turun di bawah tagihan (`TERM_BELOW_INVOICED`) | UAT: buat invoice dari termin → coba hapus baris di tab Termin |
+| 6 | Maksimal satu termin RETENTION per proyek | UAT: tambah dua baris RETENTION → 422 `RETENTION_DUPLICATE` |
+| 7 | Status CLOSED tidak kembali OPEN saat nominal diubah | test migrasi 0007 + UAT tombol **Tutup** (alasan wajib ≥ 5 karakter) |
+| 8 | Kode kategori/satuan unik per company; katalog bersama (`company_id NULL`) read-only | UAT: buat kategori `MAT` di company A dan B; coba ubah baris bersama → 409 `SHARED_CATALOG_READONLY` |
+| 9 | Kode kategori terkunci bila sudah dipakai RAB; kode satuan selalu terkunci | UAT: ubah kode kategori yang dipakai pos RAB → 409 `CATEGORY_IN_USE` |
+| 10 | Field/procurement tidak bisa melihat termin proyek yang bukan miliknya | login FIELD → tab Termin hanya proyek yang diikuti (`requireProject`) |
+| 11 | Build/typecheck/lint/test/audit hijau | `npm run typecheck && npm run lint && npm test && npm audit --omit=dev --audit-level=high` |
+
+Rincian: [`docs/modules/TERMS-CATALOG.md`](../modules/TERMS-CATALOG.md).
+
 ## Variabel environment
 
 | Variabel | Wajib | Catatan |
@@ -152,12 +178,14 @@ Rincian: [`docs/modules/MASTER-DATA.md`](../modules/MASTER-DATA.md).
 ## Catatan operasional & risiko sisa
 
 - **Koneksi pool + `SET LOCAL`**: `withCompany()` membungkus tiap request dalam transaksi. Jangan menambah query di luar `companyRoute()`/`withCompany()` — RLS akan menolaknya (fail-closed).
-- **`_migrations`** mencatat file yang sudah diterapkan; jangan mengedit file SQL yang sudah terpakai, buat file baru. `0002`, `0003`, `0004`, `0005`, dan `0006` wajib dijalankan manual sebelum production karena Vercel tidak menjalankan migrasi dari runtime aplikasi.
+- **`_migrations`** mencatat file yang sudah diterapkan; jangan mengedit file SQL yang sudah terpakai, buat file baru. `0002`, `0003`, `0004`, `0005`, `0006`, dan `0007` wajib dijalankan manual sebelum production karena Vercel tidak menjalankan migrasi dari runtime aplikasi.
 - **S2a/S2b `app.current_permissions`**: script SQL manual yang tidak menyetel GUC ini akan melihat 0 baris RAB internal (fail-closed) dan tidak dapat meloloskan over-invoice (butuh `invoice.approve`).
 - **`app.current_user_id` (0005)**: script SQL manual yang tidak menyetel GUC ini akan melihat 0 baris `notifications` (fail-closed). `withCompany()` sudah menyetelnya otomatis untuk seluruh route aplikasi.
 - **Rekalkulasi termin** saat `IMPLEMENT` melewati termin yang sudah ditagihkan (tidak menurunkan nilai di bawah tagihan). S2b memakai `contract_terms.invoiced_amount` yang dijaga trigger sebagai sumber kumulatif; termin `INVOICED` / `CLOSED` atau `is_auto_amount=false` tidak diubah otomatis.
 - **Keanggotaan proyek** (`project_members`) wajib ada untuk peran non-ADMIN; `npm run db:seed:demo` sudah mengisinya, produksi harus dipastikan manual.
-- **Control-plane belum di-RLS** (`users`, `sessions`, `companies`, `memberships`, `invitations`, `auth_events`, katalog). Akses dijaga di aplikasi; pemisahan role DB direncanakan S2.
+- **Control-plane belum di-RLS** (`users`, `sessions`, `companies`, `memberships`, `invitations`, `auth_events`, katalog). Akses dijaga di aplikasi; pemisahan role DB direncanakan S2. Untuk katalog, `listCatalog()` memfilter `company_id IS NULL OR company_id = <company aktif>` secara eksplisit.
+- **Katalog bersama (`company_id IS NULL`)** adalah warisan pra-S1 dan **read-only** di UI/API (409 `SHARED_CATALOG_READONLY`). Company yang butuh variasi membuat baris sendiri dengan kode berbeda.
+- **Urutan termin** dijaga UNIQUE `(company_id, project_id, sort_order)`; penyimpanan replace-by-set menggeser baris lama ke slot sementara dalam satu transaksi, jadi jangan menulis `contract_terms.sort_order` manual di luar `saveContractTerms()`.
 - **Token undangan** belum dikirim email — admin menyalin tautan manual. Integrasi email/SSO menyusul.
 - **Rate limit login** berbasis tabel `auth_events`; belum ada lockout per akun/MFA.
 - **`npm audit --omit=dev`** masih menyisakan 2 temuan *moderate* pada `exceljs`/`uuid` (tidak ada patch tanpa major downgrade). Risiko diterima sadar; dievaluasi saat sprint QA.
