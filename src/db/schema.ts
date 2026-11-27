@@ -58,7 +58,8 @@ export const companySettings = pgTable("company_settings", {
 export const clients = pgTable("clients", {
   id: id(),
   companyId: uuid("company_id").notNull().default(sql`app_current_company_id()`),
-  code: text("code").notNull().unique(),
+  // 0006: unik PER COMPANY, bukan global.
+  code: text("code").notNull(),
   legalName: text("legal_name").notNull(),
   displayName: text("display_name").notNull(),
   industry: text("industry").notNull(),
@@ -68,7 +69,7 @@ export const clients = pgTable("clients", {
   contactPhone: text("contact_phone"),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
   createdAt: createdAt(),
-});
+}, (table) => [uniqueIndex("clients_company_code_idx").on(table.companyId, table.code)]);
 
 export const sites = pgTable("sites", {
   id: id(),
@@ -84,7 +85,7 @@ export const sites = pgTable("sites", {
 export const opportunities = pgTable("opportunities", {
   id: id(),
   companyId: uuid("company_id").notNull().default(sql`app_current_company_id()`),
-  code: text("code").notNull().unique(),
+  code: text("code").notNull(),
   title: text("title").notNull(),
   clientId: text("client_id").notNull().references(() => clients.id),
   siteId: text("site_id").references(() => sites.id),
@@ -95,12 +96,12 @@ export const opportunities = pgTable("opportunities", {
   status: text("status").notNull().default("DRAFT"),
   outcomeReason: text("outcome_reason"),
   createdAt: createdAt(),
-});
+}, (table) => [uniqueIndex("opportunities_company_code_idx").on(table.companyId, table.code)]);
 
 export const projects = pgTable("projects", {
   id: id(),
   companyId: uuid("company_id").notNull().default(sql`app_current_company_id()`),
-  code: text("code").notNull().unique(),
+  code: text("code").notNull(),
   title: text("title").notNull(),
   clientId: text("client_id").notNull().references(() => clients.id),
   siteId: text("site_id").references(() => sites.id),
@@ -123,7 +124,7 @@ export const projects = pgTable("projects", {
   isLocked: boolean("is_locked").notNull().default(false),
   createdAt: createdAt(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [uniqueIndex("projects_company_code_idx").on(table.companyId, table.code)]);
 
 export const projectMembers = pgTable(
   "project_members",
