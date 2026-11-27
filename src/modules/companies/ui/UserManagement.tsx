@@ -1,9 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Copy, Lock, LockOpen, RefreshCw, UserPlus, Users } from "lucide-react";
+import { Copy, KeyRound, Lock, LockOpen, RefreshCw, UserPlus, Users } from "lucide-react";
 import { api } from "@/lib/client";
 import { ROLES, type Role } from "@/lib/domain";
-import { Badge, Button, EmptyState, Field, Input, SectionTitle, Select, TableSkeleton } from "@/components/ui";
+import { Badge, Button, EmptyState, Field, Input, Modal, SectionTitle, Select, TableSkeleton } from "@/components/ui";
 import type { InviteResult, MemberView, PendingInviteView } from "@/modules/companies/types";
 
 /** Label peran yang dipakai di UI manajemen pengguna. */
@@ -25,6 +25,10 @@ export default function UserManagement({ onSaved }: { onSaved: (message: string)
   const [role, setRole] = useState<Role>("FIELD");
   const [saving, setSaving] = useState(false);
   const [invite, setInvite] = useState<InviteResult | null>(null);
+  const [resetFor, setResetFor] = useState<MemberView | null>(null);
+  const [resetPassword, setResetPassword] = useState("");
+  const [resetSaving, setResetSaving] = useState(false);
+  const [resetDone, setResetDone] = useState<{ name: string; password: string } | null>(null);
 
   const load = async () => {
     try {
@@ -69,6 +73,26 @@ export default function UserManagement({ onSaved }: { onSaved: (message: string)
     }
   };
 
+  /* Reset password: password baru diketik admin, lalu ditampilkan sekali agar
+     dapat diserahkan ke pengguna. Server tidak pernah mengembalikan password. */
+  const submitReset = async () => {
+    if (!resetFor) return;
+    setResetSaving(true); setError("");
+    try {
+      await api(`/api/users/${encodeURIComponent(resetFor.userId)}/password`, {
+        method: "POST", body: JSON.stringify({ newPassword: resetPassword }),
+      });
+      setResetDone({ name: resetFor.name, password: resetPassword });
+      onSaved(`Password ${resetFor.name} direset; semua sesinya dicabut dan kunci login dibuka.`);
+      setResetFor(null); setResetPassword("");
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Reset password gagal.");
+    } finally {
+      setResetSaving(false);
+    }
+  };
+
   const unlock = async (userId: string) => {
     setError("");
     try {
@@ -87,6 +111,18 @@ export default function UserManagement({ onSaved }: { onSaved: (message: string)
         description={`Data berada di akun company${company ? ` ${company}` : ""}, bukan akun pribadi. Setiap user masuk lewat keanggotaan company; peran menentukan izin dan RAB internal.`}
         action={<Button variant="ghost" size="sm" onClick={() => void load()}><RefreshCw size={14} />Muat ulang</Button>}
       />
+
+      {resetDone ? (
+        <div className="mb-4 rounded-[var(--radius-control)] border border-ok-line bg-ok-bg px-3 py-2.5 text-[12px]">
+          <p className="font-semibold text-ok">Password {resetDone.name} sudah direset</p>
+          <p className="mt-1 text-muted">Serahkan password ini lewat kanal aman, lalu minta pengguna menggantinya di menu akun. Password tidak ditampilkan lagi setelah Anda menutup pesan ini.</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <code className="mono rounded bg-surface px-2 py-1.5 text-[11.5px]">{resetDone.password}</code>
+            <Button variant="secondary" size="sm" onClick={() => void navigator.clipboard?.writeText(resetDone.password)}><Copy size={13} />Salin</Button>
+            <Button variant="ghost" size="sm" onClick={() => setResetDone(null)}>Tutup</Button>
+          </div>
+        </div>
+      ) : null}
 
       {error ? <p role="alert" className="mb-4 rounded-[var(--radius-control)] border border-danger-line bg-danger-bg px-3 py-2 text-[12px] text-danger">{error}</p> : null}
 
@@ -136,6 +172,9 @@ export default function UserManagement({ onSaved }: { onSaved: (message: string)
                       <Button variant="secondary" size="sm" onClick={() => void unlock(m.userId)}><LockOpen size={13} />Buka kunci</Button>
                     </>
                   ) : null}
+                  <Button variant="ghost" size="sm" onClick={() => { setResetFor(m); setResetPassword(""); }}>
+                    <KeyRound size={13} />Reset password
+                  </Button>
                   <Button variant="ghost" size="sm" onClick={() => void changeMember(m.userId, { status: m.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE" })}>
                     {m.status === "ACTIVE" ? "Nonaktifkan" : "Aktifkan"}
                   </Button>

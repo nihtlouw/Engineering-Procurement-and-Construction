@@ -20,8 +20,39 @@ export const updateMemberSchema = z.object({
   message: "Minimal satu perubahan (peran atau status) wajib diisi.",
 });
 
+/**
+ * Reset password oleh ADMIN. Kekuatan minimum sengaja lebih tinggi dari
+ * pendaftaran (12 vs 8) karena jalur ini melewati verifikasi password lama.
+ * Password lama TIDAK pernah dikirim/ditampilkan; hanya hash baru yang disimpan.
+ */
+export const adminResetPasswordSchema = z.object({
+  newPassword: z.string()
+    .min(12, "Password baru minimal 12 karakter.")
+    .max(128, "Password maksimal 128 karakter.")
+    .refine((value) => /[a-z]/.test(value) && /[A-Z]/.test(value), {
+      message: "Password harus memuat huruf kecil dan huruf besar.",
+    })
+    .refine((value) => /\d/.test(value), { message: "Password harus memuat angka." }),
+});
+
+/** Ganti password sendiri (wajib menyebut password lama). */
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Password saat ini wajib diisi.").max(128),
+  newPassword: z.string()
+    .min(12, "Password baru minimal 12 karakter.")
+    .max(128, "Password maksimal 128 karakter.")
+    .refine((value) => /[a-z]/.test(value) && /[A-Z]/.test(value), {
+      message: "Password harus memuat huruf kecil dan huruf besar.",
+    })
+    .refine((value) => /\d/.test(value), { message: "Password harus memuat angka." }),
+}).refine((value) => value.currentPassword !== value.newPassword, {
+  message: "Password baru harus berbeda dari password lama.",
+});
+
 export const switchCompanySchema = z.object({ companyId: z.string().uuid("ID company tidak valid.") });
 
 export type InviteInput = z.infer<typeof inviteSchema>;
 export type AcceptInviteInput = z.infer<typeof acceptInviteSchema>;
 export type UpdateMemberInput = z.infer<typeof updateMemberSchema>;
+export type AdminResetPasswordInput = z.infer<typeof adminResetPasswordSchema>;
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;

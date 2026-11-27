@@ -255,6 +255,54 @@ Urutan: `npm run db:migrate -- --check` → `npm run db:migrate` → `npm run db
 | 12 | Progres pada baris ringkasan WBS ditolak | UAT: `POST /api/schedule/<id-grup>/progress` → 422 `WBS_SUMMARY_READONLY` |
 | 13 | Build/typecheck/lint/test/audit hijau | `npm run typecheck && npm run lint && npm test && npm audit --omit=dev --audit-level=high` |
 
+## Pemulihan akses (lupa password)
+
+Password disimpan sebagai hash **scrypt** — tidak dapat dilihat atau
+"diingat kembali" oleh siapa pun, termasuk developer. Ada tiga jalur pemulihan,
+urutkan dari yang paling ringan:
+
+| Situasi | Jalur | Siapa |
+|---|---|---|
+| Pengguna masih bisa masuk | **Pengaturan → Password akun → Ganti password** (wajib password lama) | pengguna sendiri |
+| Pengguna lupa password, ada ADMIN lain yang bisa masuk | **Pengguna & peran → Reset password** pada baris anggota | ADMIN company |
+| Tidak ada satu pun ADMIN yang bisa masuk | `npm run db:reset-password -- --email <email>` | pemegang akses environment |
+
+### Reset lewat UI (ADMIN)
+
+1. Buka **Pengguna & peran**, cari anggota, klik **Reset password**.
+2. Buat password baru (min. 12 karakter, huruf besar + kecil + angka).
+3. Password baru ditampilkan **sekali** — serahkan lewat kanal aman (bukan chat grup).
+4. Efek samping otomatis: semua sesi anggota tersebut dicabut, kunci login dibuka, audit `PASSWORD_RESET` tercatat. Nilai password di audit ditulis `[redacted]`.
+5. Minta pengguna segera mengganti lewat **Pengaturan → Password akun**.
+
+### Reset lewat CLI (tidak ada ADMIN yang bisa masuk)
+
+```bash
+# password acak 20 karakter, ditampilkan sekali
+npm run db:reset-password -- --email admin@ardaya.id
+
+# atau tentukan sendiri (min. 12 karakter, huruf besar+kecil+angka)
+npm run db:reset-password -- --email admin@ardaya.id --password 'Ard4yaPemulihan26'
+```
+
+Skrip ini mencabut semua sesi akun, membuka kunci login, dan menulis audit
+`PASSWORD_RESET_CLI`. Skrip **tidak** diblokir di production (berbeda dari seed
+demo) karena inilah jalur pemulihan darurat yang sah; syaratnya tetap harus
+memegang `DATABASE_URL`.
+
+> **Kenapa tidak ada tautan "lupa password" lewat email?** Aplikasi belum punya
+> pengiriman email dan belum punya verifikasi identitas lain (OTP/pertanyaan
+> keamanan). Tanpa verifikasi, tautan reset berbasis email hanya memindahkan
+> risiko: siapa pun yang bisa membaca kotak masuk, atau yang tahu email, bisa
+> mengambil alih akun. Menambahkannya bersamaan dengan penyedia email (S6+)
+> adalah urutan yang benar.
+
+### Akun terkunci karena salah password
+
+Terkunci otomatis 15 menit setelah 10 kegagalan (60 menit setelah 20). ADMIN
+cukup menekan **Buka kunci** pada baris anggota — atau reset password, yang juga
+membuka kunci. Admin sendiri yang lupa password harus memakai jalur CLI.
+
 ## Variabel environment
 
 | Variabel | Wajib | Catatan |
