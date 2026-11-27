@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { motion } from "motion/react";
 import { ArrowRight, CheckCircle2, Eye, EyeOff, ShieldCheck, Zap } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button, Input, Field } from "@/components/ui";
 
@@ -89,9 +90,12 @@ export default function LoginScreen() {
             </Field>
             {error ? <p role="alert" className="rounded-[var(--radius-control)] border border-danger-line bg-danger-bg px-3 py-2 text-[12px] leading-relaxed text-danger">{error}</p> : null}
             <Button type="submit" size="lg" loading={loading} className="w-full">Masuk ke workspace<ArrowRight size={16} /></Button>
+            <Link href="/lupa-password" className="block text-center text-[12px] font-semibold text-muted underline-offset-4 hover:text-ink hover:underline">
+              Lupa password?
+            </Link>
           </form>
 
-          <p className="mt-5 text-[11px] leading-relaxed text-muted">Akses diberikan oleh Admin Perusahaan melalui undangan company. Hubungi admin bila akun Anda belum aktif.</p>
+          <p className="mt-5 text-[11px] leading-relaxed text-muted">Akses diberikan oleh Admin Perusahaan melalui undangan company. Bila email reset tidak masuk, hubungi admin — admin dapat mengirim tautan atau mereset password dari menu Pengguna.</p>
         </motion.div>
       </section>
     </main>

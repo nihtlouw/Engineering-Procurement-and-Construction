@@ -90,6 +90,14 @@ Tiga temuan lama ditutup tanpa menunggu sprint fitur:
 - **Kunci akun (audit #7).** `drizzle/0010_login_lockout.sql` menambah penghitung kegagalan persisten: 10 gagal → kunci 15 menit, 20 gagal → 60 menit. Login berhasil mereset penghitung; ADMIN membuka kunci lewat **Pengguna & peran → Buka kunci** (`LOGIN_UNLOCKED` di audit).
 - **Ekspor jadwal.** `GET /api/export/schedule` mengikuti izin yang sama dengan ekspor lain (`schedule.view`), dengan Σ bobot per proyek di baris pertama. Baris ringkasan WBS tidak dapat dilaporkan lewat `/api/schedule/:id/progress` (`WBS_SUMMARY_READONLY`) agar progres tidak terhitung ganda.
 
+## Reset password lewat email (`0011`)
+
+- Halaman masuk punya tautan **Lupa password** → `/lupa-password` → email berisi tautan sekali pakai (30 menit) → `/reset-password` untuk membuat password baru. Semua sesi lama dicabut.
+- Hanya **hash SHA-256 token** yang disimpan; permintaan baru mencabut tautan lama; batas 3 permintaan/akun/jam dan 10/IP/jam.
+- Respons permintaan **tidak membocorkan** apakah sebuah email terdaftar.
+- Driver email: `resend` (production), `console` (dev, tautan tampil di log **dan** di UI sebagai tautan pengembangan), `none`. Tanpa konfigurasi, ADMIN tetap dapat memakai **Reset manual** atau `npm run db:reset-password`.
+- ADMIN dapat mengirim tautan tanpa pernah mengetahui password pengguna (**Pengguna & peran → Kirim tautan**). Undangan anggota juga kini terkirim lewat email.
+
 ## Perintah
 
 | Perintah | Kegunaan |
@@ -100,6 +108,7 @@ Tiga temuan lama ditutup tanpa menunggu sprint fitur:
 | `npm test` | Vitest (unit + eksekusi seluruh migrasi SQL di PGlite; integrasi RLS opsional) |
 | `npm run db:migrate` | Terapkan migrasi berversi |
 | `npm run db:migrate -- --check` | Daftar migrasi tertunda |
+| `npm run db:create-admin` | Buat/tautkan akun ADMIN ke email Anda (`--email`, `--name`, `--company`, `--relink-from`) |
 | `npm run db:hash-password` | Buat hash `password_hash` (+ blok SQL siap tempel) untuk table/SQL editor |
 | `npm run db:reset-password` | Reset password akun lewat CLI (jalur darurat; audit + cabut sesi) |
 | `npm run db:verify` | Uji isolasi RLS + audit append-only |

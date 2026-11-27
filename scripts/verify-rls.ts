@@ -200,6 +200,19 @@ async function main() {
     } catch { negativeRejected = true; }
     check("0010 CHECK penghitung", negativeRejected,
       negativeRejected ? "DB menolak failed_login_count negatif" : "CHECK users_failed_login_count_check tidak aktif — jalankan 0010");
+    // ---- 0011: token reset password ---------------------------------------
+    const resetTable = await db.query(`SELECT relrowsecurity FROM pg_class WHERE relname='password_reset_tokens' AND relkind='r'`);
+    check("0011 tabel token reset", resetTable.rows.length === 1,
+      resetTable.rows.length === 1
+        ? `password_reset_tokens ada (RLS ${resetTable.rows[0].relrowsecurity ? "aktif" : "sengaja tidak aktif, seperti invitations"})`
+        : "tabel password_reset_tokens belum ada — jalankan migrasi 0011");
+
+    const resetUnique = await db.query(`SELECT count(*)::int AS n FROM pg_indexes
+      WHERE tablename='password_reset_tokens' AND indexname='password_reset_tokens_token_hash_key'`);
+    check("0011 token unik", Number(resetUnique.rows[0]?.n ?? 0) === 1,
+      Number(resetUnique.rows[0]?.n ?? 0) === 1
+        ? "token_hash unik: token yang sama tidak dapat disimpan dua kali"
+        : "unique index token_hash belum ada — jalankan 0011");
   } finally {
     // Bersihkan data uji.
     try {

@@ -24,6 +24,8 @@ export type InviteResult = {
   /** Token mentah hanya dikembalikan SEKALI. Kirim via kanal aman di luar aplikasi. */
   delivery: "manual";
   acceptPath: string;
+  /** 0011: hasil pengiriman email otomatis (bila EMAIL_DRIVER dikonfigurasi). */
+  emailDelivered: boolean;
 };
 
 export type PendingInviteView = {

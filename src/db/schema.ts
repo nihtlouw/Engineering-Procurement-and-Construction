@@ -664,6 +664,25 @@ export const invitations = pgTable(
   (table) => [index("invitations_company_email_idx").on(table.companyId, table.email)],
 );
 
+/** 0011: token reset password sekali pakai (hanya hash SHA-256 yang disimpan). */
+export const passwordResetTokens = pgTable(
+  "password_reset_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull().unique(),
+    requestedIp: text("requested_ip"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    index("password_reset_tokens_user_idx").on(table.userId, table.createdAt),
+    index("password_reset_tokens_expires_idx").on(table.expiresAt),
+  ],
+);
+
 export const authEvents = pgTable(
   "auth_events",
   {
