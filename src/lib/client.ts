@@ -37,3 +37,50 @@ export async function uploadFile(file: File) {
   const compressed = await compressImage(file); const base64 = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(",")[1]); reader.onerror = reject; reader.readAsDataURL(compressed); });
   return api<{ id: string; fileName: string; sizeBytes: number; duplicateReceipt: boolean }>("/api/files", { method: "POST", body: JSON.stringify({ fileName: compressed.name, mimeType: compressed.type || "application/octet-stream", contentBase64: base64 }) });
 }
+
+/* -------------------------------------------------------------------------- */
+/* Master data (tahap 2)                                                      */
+/* -------------------------------------------------------------------------- */
+
+export type MasterDataOptions = {
+  users: { id: string; name: string; title: string; role: string; email?: string }[];
+  clients: { id: string; code: string; displayName: string; legalName: string }[];
+  sites: { id: string; clientId: string; name: string; address: string | null }[];
+  projectRoles: string[];
+  meta: { defaultPpnRate: string; today: string };
+};
+
+/** Opsi form wizard proyek. Dipanggil saat modal dibuka, bukan saat SSR. */
+export const fetchMasterDataOptions = () => api<MasterDataOptions>("/api/master-data/options");
+
+export type ProjectMemberView = {
+  id: string; projectId: string; userId: string; projectRole: string;
+  name: string; email: string; title: string;
+};
+
+export const addProjectMember = (projectId: string, body: { userId: string; projectRole: string }) =>
+  api<{ id: string }>(`/api/projects/${projectId}/members`, { method: "POST", body: JSON.stringify(body) });
+
+export const removeProjectMember = (projectId: string, memberId: string) =>
+  api<{ id: string }>(`/api/projects/${projectId}/members/${memberId}`, { method: "DELETE" });
+
+export const updateProject = (projectId: string, body: Record<string, unknown>) =>
+  api<{ id: string; changed: number }>(`/api/projects/${projectId}`, { method: "PATCH", body: JSON.stringify(body) });
+
+export const createClientRecord = (body: Record<string, unknown>) =>
+  api<{ id: string; code: string }>("/api/clients", { method: "POST", body: JSON.stringify(body) });
+
+export const updateClientRecord = (clientId: string, body: Record<string, unknown>) =>
+  api<{ id: string; changed: number }>(`/api/clients/${clientId}`, { method: "PATCH", body: JSON.stringify(body) });
+
+export const archiveClientRecord = (clientId: string) =>
+  api<{ id: string }>(`/api/clients/${clientId}`, { method: "POST", body: JSON.stringify({ action: "ARCHIVE" }) });
+
+export const createSiteRecord = (body: Record<string, unknown>) =>
+  api<{ id: string }>("/api/sites", { method: "POST", body: JSON.stringify(body) });
+
+export const updateSiteRecord = (siteId: string, body: Record<string, unknown>) =>
+  api<{ id: string; changed: number }>(`/api/sites/${siteId}`, { method: "PATCH", body: JSON.stringify(body) });
+
+export const createProjectRecord = (body: Record<string, unknown>) =>
+  api<{ id: string; code: string; stage: string; members: number }>("/api/projects", { method: "POST", body: JSON.stringify(body) });

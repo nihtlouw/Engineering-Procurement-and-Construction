@@ -112,6 +112,16 @@ async function main() {
     const notificationPolicyCount = Number(notificationPolicies.rows[0].n);
     check("0005 notifikasi per pengguna", notificationPolicyCount === 2,
       `${notificationPolicyCount}/2 policy RESTRICTIVE (SELECT/UPDATE) pada notifications`);
+
+    // 10. Invariant 0006: kode master data unik PER COMPANY (bukan global).
+    const codeIndexes = await db.query(`SELECT indexname FROM pg_indexes
+      WHERE schemaname='public' AND indexname = ANY($1::text[])`,
+      [["clients_company_code_idx", "opportunities_company_code_idx", "projects_company_code_idx"]]);
+    const codeIndexCount = codeIndexes.rowCount ?? 0;
+    check("0006 kode per company", codeIndexCount === 3,
+      codeIndexCount === 3
+        ? "clients/opportunities/projects unik per company"
+        : `${codeIndexCount}/3 index unik (company_id, code) ada — jalankan migrasi 0006`);
   } finally {
     // Bersihkan data uji.
     try {

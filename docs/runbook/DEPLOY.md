@@ -1,10 +1,10 @@
-# Runbook deploy — S1 / S2a / S2b / S3 / hardening-1
+# Runbook deploy — S1 / S2a / S2b / S3 / hardening-1 / master data
 
 ## Urutan (jangan dibalik)
 
 1. **Backup** database produksi (snapshot + uji restore). Migrasi S1 menambah kolom `NOT NULL` + backfill; tidak ada down script.
 2. Set environment di Vercel: `DATABASE_URL`, `FILE_SIGNING_SECRET` (≥ 32 char acak), dan untuk S3 `FILE_STORAGE_DRIVER=s3` + kredensial bucket privat. Pastikan `SEED_DEMO_PASSWORD` **tidak** diset di production.
-3. Jalankan migrasi dari mesin yang punya akses DB (bukan dari Vercel runtime). Runner otomatis menerapkan `0000 → 0001 → 0002 → 0003 → 0004 → 0005`:
+3. Jalankan migrasi dari mesin yang punya akses DB (bukan dari Vercel runtime). Runner otomatis menerapkan `0000 → 0001 → 0002 → 0003 → 0004 → 0005 → 0006`:
    ```bash
    npm ci
    cp .env.example .env.local   # isi DATABASE_URL produksi
@@ -115,6 +115,26 @@ Urutan: backup → `npm run db:migrate -- --check` → `npm run db:migrate` → 
 
 Rincian: [`docs/modules/HARDENING-1.md`](../modules/HARDENING-1.md).
 
+## Deploy master data (`0006_master_data_codes.sql`)
+
+Migrasi **forward-only**, tanpa perubahan data: melepas UNIQUE global pada
+`clients/opportunities/projects.code` lalu membuat UNIQUE `(company_id, code)`.
+Backup tetap dianjurkan (DDL pada tabel inti).
+
+| # | Kriteria master data | Cara |
+|---|---|---|
+| 1 | Rangkaian 0000–0006 tereksekusi (30 tabel FORCE RLS, 124 policy, 3 index kode) | `npm test -- tests/unit/migrations.test.ts` |
+| 2 | Dua company boleh memakai kode proyek sama; duplikat dalam company ditolak | test migrasi 0006 + UAT: buat `PRJ-2026-001` di company A lalu di company B |
+| 3 | PM membuat proyek tanpa bantuan developer (< 15 menit) | UAT: menu **Master Data → Proyek baru** (3 langkah) |
+| 4 | PM otomatis bisa membuka proyek yang dibuatnya | UAT: login PM, buka workspace proyek baru |
+| 5 | Klien & site bisa dibuat dari wizard (quick create) | UAT: langkah 1 → "Klien baru cepat" + "Site baru cepat" |
+| 6 | Anggota bisa ditambah/dikeluarkan; PM & anggota terakhir dilindungi | UAT tab **Anggota** |
+| 7 | Klien dengan proyek tidak bisa diarsipkan | UAT tab **Klien → Arsip** → 409 `CLIENT_HAS_PROJECTS` |
+| 8 | Field tanpa `schedule.edit` hanya bisa melihat | login FIELD → tombol tambah/ubah tidak muncul |
+| 9 | Build/typecheck/lint/test/audit hijau | `npm run typecheck && npm run lint && npm test && npm audit --omit=dev --audit-level=high` |
+
+Rincian: [`docs/modules/MASTER-DATA.md`](../modules/MASTER-DATA.md).
+
 ## Variabel environment
 
 | Variabel | Wajib | Catatan |
@@ -132,7 +152,7 @@ Rincian: [`docs/modules/HARDENING-1.md`](../modules/HARDENING-1.md).
 ## Catatan operasional & risiko sisa
 
 - **Koneksi pool + `SET LOCAL`**: `withCompany()` membungkus tiap request dalam transaksi. Jangan menambah query di luar `companyRoute()`/`withCompany()` — RLS akan menolaknya (fail-closed).
-- **`_migrations`** mencatat file yang sudah diterapkan; jangan mengedit file SQL yang sudah terpakai, buat file baru. `0002`, `0003`, `0004`, dan `0005` wajib dijalankan manual sebelum production karena Vercel tidak menjalankan migrasi dari runtime aplikasi.
+- **`_migrations`** mencatat file yang sudah diterapkan; jangan mengedit file SQL yang sudah terpakai, buat file baru. `0002`, `0003`, `0004`, `0005`, dan `0006` wajib dijalankan manual sebelum production karena Vercel tidak menjalankan migrasi dari runtime aplikasi.
 - **S2a/S2b `app.current_permissions`**: script SQL manual yang tidak menyetel GUC ini akan melihat 0 baris RAB internal (fail-closed) dan tidak dapat meloloskan over-invoice (butuh `invoice.approve`).
 - **`app.current_user_id` (0005)**: script SQL manual yang tidak menyetel GUC ini akan melihat 0 baris `notifications` (fail-closed). `withCompany()` sudah menyetelnya otomatis untuk seluruh route aplikasi.
 - **Rekalkulasi termin** saat `IMPLEMENT` melewati termin yang sudah ditagihkan (tidak menurunkan nilai di bawah tagihan). S2b memakai `contract_terms.invoiced_amount` yang dijaga trigger sebagai sumber kumulatif; termin `INVOICED` / `CLOSED` atau `is_auto_amount=false` tidak diubah otomatis.

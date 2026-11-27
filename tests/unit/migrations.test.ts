@@ -4,7 +4,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { beforeAll, afterAll, describe, expect, it } from "vitest";
 
 /**
- * Uji SELURUH migrasi (0000 → 0005) dari database kosong TANPA server
+ * Uji SELURUH migrasi (0000 → 0006) dari database kosong TANPA server
  * Postgres eksternal. PGlite = Postgres (WASM) in-process. Baseline di bawah
  * meniru skema 28 tabel pra-S1; bukan pengganti `npm run db:verify` pada DB nyata.
  */
@@ -18,6 +18,8 @@ const TABLES = [
 
 const EXTRA: Record<string, string> = {
   clients: ", code text, legal_name text, display_name text, industry text",
+  opportunities: ", code text, title text, client_id text, status text not null default 'DRAFT'",
+  sites: ", client_id text, name text, address text",
   projects: `, code text, title text, client_id text, stage text, is_locked boolean default false,
     contract_value numeric(18,2) not null default 0, contract_ppn numeric(18,2),
     retention_pct numeric(5,2) not null default 5, warranty_months integer not null default 12,
@@ -116,7 +118,7 @@ INSERT INTO customer_invoices (id,project_id,contract_term_id,number,type,total_
   await db.exec(ddl);
 
   const dir = path.resolve(process.cwd(), "drizzle");
-  for (const file of ["0000_tenant_foundation.sql", "0001_rls_policies.sql", "0002_s2a_budgeting_ptk.sql", "0003_s2b_po_terms_co.sql", "0004_s3_field_photos.sql", "0005_hardening_invoice_notifications.sql"]) {
+  for (const file of ["0000_tenant_foundation.sql", "0001_rls_policies.sql", "0002_s2a_budgeting_ptk.sql", "0003_s2b_po_terms_co.sql", "0004_s3_field_photos.sql", "0005_hardening_invoice_notifications.sql", "0006_master_data_codes.sql"]) {
     await db.exec(readFileSync(path.join(dir, file), "utf8"));
   }
   // PGlite default = superuser (BYPASSRLS). Neon/Supabase memakai role non-superuser.
@@ -445,5 +447,38 @@ describe("migrasi 0005 hardening", () => {
     const [field] = await rows("SELECT read_at FROM notifications WHERE id='n-field'");
     expect(field.read_at).toBeNull();
     await scope(defaultCompany, "budget.internal.view,budget.client.view,document.view", "u-admin");
+  });
+});
+
+describe("migrasi 0006 · kode master data per company", () => {
+  it("UNIQUE global dilepas: company berbeda boleh memakai kode proyek yang sama", async () => {
+    const defaultCompany = await defaultScope();
+    await scope(defaultCompany, "schedule.edit");
+    // Proyek kode baru di company default.
+    await db.exec(`INSERT INTO projects (id,code,title,client_id,stage) VALUES ('p-dup','PRJ-2026-001','Proyek Duplikat','c1','AWAITING_KICKOFF')`);
+    // Company lain memakai kode yang identik → harus berhasil.
+    let [other] = await rows("SELECT id FROM companies WHERE slug='other'");
+    if (!other) {
+      await db.exec("INSERT INTO companies (slug,name,legal_name) VALUES ('other','Other','Other');");
+      [other] = await rows("SELECT id FROM companies WHERE slug='other'");
+    }
+    await scope(String(other.id), "schedule.edit");
+    await db.exec("INSERT INTO clients (id,code,legal_name,display_name,industry) VALUES ('c-other','C-OTH','PT Lain','Lain','Retail');");
+    await db.exec(`INSERT INTO projects (id,code,title,client_id,stage) VALUES ('p-dup-2','PRJ-2026-001','Proyek Sama Kode','c-other','AWAITING_KICKOFF')`);
+    const same = await rows("SELECT id, company_id FROM projects WHERE code='PRJ-2026-001'");
+    expect(same).toHaveLength(1); // RLS: hanya company aktif yang terlihat
+    // Duplikat DI DALAM company yang sama tetap ditolak.
+    await expect(db.exec(`INSERT INTO projects (id,code,title,client_id,stage) VALUES ('p-dup-3','PRJ-2026-001','Duplikat','c-other','AWAITING_KICKOFF')`)).rejects.toThrow();
+    await scope(defaultCompany, "budget.internal.view,budget.client.view,document.view");
+  });
+
+  it("index unik (company_id, code) ada untuk clients, opportunities, projects", async () => {
+    const indexes = await rows(`SELECT indexname FROM pg_indexes
+      WHERE schemaname='public' AND indexname IN
+        ('clients_company_code_idx','opportunities_company_code_idx','projects_company_code_idx')
+      ORDER BY indexname`);
+    expect(indexes.map((r) => r.indexname)).toEqual([
+      "clients_company_code_idx", "opportunities_company_code_idx", "projects_company_code_idx",
+    ]);
   });
 });

@@ -10,6 +10,7 @@ Migrasi SQL **berversi dan wajib** — `drizzle-kit push` hanya untuk percobaan 
 | `0003_s2b_po_terms_co.sql` | S2b: `po_items` + RLS, backfill PO lama per company, `expense_lines.po_item_id`, `contract_terms.invoiced_amount/status/is_auto_amount`, `customer_invoices.over_invoice_reason`, kolom bukti/pembatalan CO lama, trigger kumulatif termin, pagu termin/kontrak, dan integritas company/project |
 | `0004_s3_field_photos.sql` | S3: `file_objects.content_base64` nullable + metadata storage, tabel `field_photos` / `document_photo_links`, composite company FK, trigger kesamaan proyek, dan `FORCE RLS` pada 2 tabel baru |
 | `0005_hardening_invoice_notifications.sql` | Hardening-1: `customer_invoices.created_by_id` (+ backfill dari `activity_logs`), `app_current_user_id()`, dan 2 policy **RESTRICTIVE** pada `notifications` (SELECT/UPDATE hanya milik `user_id` sesi) |
+| `0006_master_data_codes.sql` | Master data: UNIQUE global `clients/opportunities/projects.code` diganti UNIQUE `(company_id, code)`, index `sites_client_idx` |
 
 ## Perintah
 
@@ -37,6 +38,7 @@ SELECT set_config('app.current_company_id', '<uuid>', true);  -- true = SET LOCA
 - Jangan pernah memakai `SET` (session-level) pada koneksi pool: nilainya bisa terbawa ke request berikutnya.
 - 0005 menambah GUC ketiga: `app.current_user_id`, juga `SET LOCAL` di transaksi yang sama. Tanpa itu policy RESTRICTIVE `notifications` fail-closed (0 notifikasi).
 - S2a menambah GUC kedua: `app.current_permissions` (daftar izin dipisah koma), juga `SET LOCAL` di transaksi yang sama. Tanpa itu policy RESTRICTIVE RAB internal bersifat **fail-closed** (0 baris). S2b memakai GUC yang sama untuk `app_has_permission('invoice.approve')` pada trigger anti double-invoice; SQL manual tanpa GUC tidak dapat meloloskan over-invoice.
+- Setelah `0006`, kode `clients` / `opportunities` / `projects` unik **per company**, bukan global.
 - Setelah `0005`, total tabel bisnis ber-RLS = **30** dengan **124 policy** (120 isolasi + 2 RESTRICTIVE RAB internal + 2 RESTRICTIVE notifikasi). Backfill `0003` berjalan per company di bawah FORCE RLS, lalu GUC di-reset agar koneksi migrasi tidak mewarisi scope. Foto baru S3 tidak memakai `content_base64`; file lama/PDF final tetap provider `DB`.
 
 ## Yang sengaja TIDAK di-RLS (S1)
@@ -46,9 +48,9 @@ SELECT set_config('app.current_company_id', '<uuid>', true);  -- true = SET LOCA
 ## Urutan deploy
 
 1. Backup database.
-2. `npm run db:migrate` (0000 → 0001 → 0002 → 0003 → 0004, otomatis).
+2. `npm run db:migrate` (0000 → 0001 → 0002 → 0003 → 0004 → 0005 → 0006, otomatis).
 3. `npm run db:verify`.
 4. Deploy aplikasi.
 5. Cek `/api/health` dan login salah satu akun.
 
-Rollback: migrasi ini **tidak memiliki down script** karena menambah kolom, tabel, constraint, dan backfill. `0004` juga forward-only. Pulihkan dari backup bila perlu; jangan menghapus kolom `company_id` sembari aplikasi baru berjalan.
+Rollback: migrasi ini **tidak memiliki down script** karena menambah kolom, tabel, constraint, dan backfill. `0004`, `0005`, dan `0006` juga forward-only. Pulihkan dari backup bila perlu; jangan menghapus kolom `company_id` sembari aplikasi baru berjalan.
