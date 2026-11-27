@@ -275,6 +275,37 @@ urutkan dari yang paling ringan:
 4. Efek samping otomatis: semua sesi anggota tersebut dicabut, kunci login dibuka, audit `PASSWORD_RESET` tercatat. Nilai password di audit ditulis `[redacted]`.
 5. Minta pengguna segera mengganti lewat **Pengaturan → Password akun**.
 
+### Lewat table editor / SQL editor Neon
+
+Cara paling cepat bila Anda sudah membuka dashboard Neon — tetapi **jangan
+mengetik password** ke kolom `password_hash`. Kolom itu berisi `salt:hash`
+scrypt 161 karakter; teks biasa tidak akan pernah cocok dan akun jadi mustahil
+login. Buat hash-nya dulu:
+
+```bash
+npm run db:hash-password -- --password 'Ard4yaPemulihan26' --email admin@ardaya.id
+```
+
+Perintah di atas mencetak hash **dan** blok SQL siap tempel (satu transaksi,
+sekalian mereset penghitung, membuka kunci, dan mencabut sesi). Bila ingin
+lewat **table editor** alih-alih SQL editor: salin hash, lalu pada baris akun
+ubah tiga kolom berikut dalam satu kali simpan:
+
+| Kolom | Nilai |
+|---|---|
+| `password_hash` | hash hasil perintah di atas (tempel, jangan diketik) |
+| `failed_login_count` | `0` |
+| `locked_until` | `NULL` (kosongkan) |
+
+Setelah menyimpan dari table editor, **hapus baris di tabel `sessions`** milik
+user tersebut (atau jalankan `delete from sessions where user_id = '<id>'`),
+supaya sesi lama tidak tetap hidup.
+
+> Hash lama di screenshot Anda terlihat identik untuk enam akun karena seed demo
+> memakai satu password yang sama untuk semua akun — itu normal, bukan bug.
+> Kalau Anda mengubahnya satu per satu di table editor, gunakan hash **berbeda**
+> per akun (jalankan CLI sekali per akun) agar satu kebocoran tidak membuka semua akun.
+
 ### Reset lewat CLI (tidak ada ADMIN yang bisa masuk)
 
 ```bash
