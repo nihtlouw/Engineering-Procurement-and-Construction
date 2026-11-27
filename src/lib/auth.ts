@@ -105,6 +105,12 @@ export async function createSession(userId: string, companyId: string) {
   });
 }
 
+/** Id sesi aktif dari cookie (bukan rahasia baru — cookie httpOnly sudah ada). */
+export async function getCurrentSessionId(): Promise<string | null> {
+  const store = await cookies();
+  return store.get(SESSION_COOKIE)?.value ?? null;
+}
+
 /** Di dalam withCompany() mengembalikan user dari konteks (tanpa query ulang). */
 export async function requireUser(): Promise<SessionUser> {
   const scoped = getScope()?.user;

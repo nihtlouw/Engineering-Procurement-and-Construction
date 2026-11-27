@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { and, desc, eq, gt, isNull, ne } from "drizzle-orm";
 import { baseDb, db } from "@/db";
-import { activityLogs, companies, invitations, memberships, users } from "@/db/schema";
+import { activityLogs, companies, invitations, memberships, sessions, users } from "@/db/schema";
 import { ApiError, hashPassword, hashToken, verifyPassword } from "@/lib/auth";
 import { type Role } from "@/lib/domain";
 import type { CompanyView, InviteResult, MemberView, PendingInviteView } from "@/modules/companies/types";
@@ -197,6 +197,72 @@ export async function unlockMember(
     changes: [{ field: "lockedUntil", old: account.lockedUntil?.toISOString() ?? null, new: null }],
   });
   return { unlocked: true, previousFailures: account.failedLoginCount };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Password                                                                   */
+/* -------------------------------------------------------------------------- */
+
+/** Sesi aktif user ini dicabut — dipakai setiap kali password berubah. */
+async function revokeSessions(userId: string, exceptSessionId?: string) {
+  const where = exceptSessionId
+    ? and(eq(sessions.userId, userId), ne(sessions.id, exceptSessionId))
+    : eq(sessions.userId, userId);
+  await baseDb.delete(sessions).where(where);
+}
+
+/**
+ * ADMIN mereset password anggota company-nya. Password lama tidak diminta
+ * (justru kasus pakainya: pengguna lupa), tetapi semua sesi target dicabut dan
+ * tindakan ini diaudit — reset password adalah aksi bernilai keamanan tinggi.
+ */
+export async function resetMemberPassword(
+  companyId: string, targetUserId: string, newPassword: string, actorId: string,
+): Promise<{ userId: string; sessionsRevoked: number }> {
+  const [target] = await db.select({ id: memberships.id }).from(memberships)
+    .where(and(eq(memberships.companyId, companyId), eq(memberships.userId, targetUserId)))
+    .limit(1);
+  if (!target) throw new ApiError("NOT_FOUND", "Anggota tidak ditemukan pada company ini.", 404);
+
+  const active = await baseDb.select({ id: sessions.id }).from(sessions).where(eq(sessions.userId, targetUserId));
+  await baseDb.update(users).set({
+    passwordHash: hashPassword(newPassword),
+    // Reset password sekaligus membuka kunci: kalau tidak, pengguna tetap
+    // tertahan 15 menit setelah admin menyelesaikan masalahnya.
+    failedLoginCount: 0,
+    lockedUntil: null,
+  }).where(eq(users.id, targetUserId));
+  await revokeSessions(targetUserId);
+  await db.insert(activityLogs).values({
+    id: randomUUID(), objectType: "USER", objectId: targetUserId, action: "PASSWORD_RESET",
+    actorId, companyId,
+    changes: [{ field: "passwordHash", old: "[redacted]", new: "[redacted]" }],
+  });
+  return { userId: targetUserId, sessionsRevoked: active.length };
+}
+
+/**
+ * Ganti password sendiri. Wajib menyebut password lama dan memverifikasinya:
+ * sesi yang dibajak tanpa password tidak boleh dapat mengunci pemilik akun.
+ */
+export async function changeOwnPassword(
+  userId: string, currentPassword: string, newPassword: string, currentSessionId?: string,
+): Promise<{ sessionsRevoked: number }> {
+  const [account] = await baseDb.select({ passwordHash: users.passwordHash }).from(users).where(eq(users.id, userId)).limit(1);
+  if (!account) throw new ApiError("NOT_FOUND", "Akun tidak ditemukan.", 404);
+  if (!verifyPassword(currentPassword, account.passwordHash)) {
+    throw new ApiError("INVALID_CREDENTIALS", "Password saat ini tidak sesuai.", 401);
+  }
+  const active = await baseDb.select({ id: sessions.id }).from(sessions).where(eq(sessions.userId, userId));
+  await baseDb.update(users).set({ passwordHash: hashPassword(newPassword) }).where(eq(users.id, userId));
+  // Sesi lain dicabut, sesi sekarang dipertahankan agar pengguna tidak terlempar.
+  await revokeSessions(userId, currentSessionId);
+  await db.insert(activityLogs).values({
+    id: randomUUID(), objectType: "USER", objectId: userId, action: "PASSWORD_CHANGED",
+    actorId: userId,
+    changes: [{ field: "passwordHash", old: "[redacted]", new: "[redacted]" }],
+  });
+  return { sessionsRevoked: Math.max(0, active.length - (currentSessionId ? 1 : 0)) };
 }
 
 export function roleTitle(role: Role): string {
