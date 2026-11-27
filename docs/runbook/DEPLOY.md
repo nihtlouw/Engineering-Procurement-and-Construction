@@ -275,6 +275,58 @@ urutkan dari yang paling ringan:
 4. Efek samping otomatis: semua sesi anggota tersebut dicabut, kunci login dibuka, audit `PASSWORD_RESET` tercatat. Nilai password di audit ditulis `[redacted]`.
 5. Minta pengguna segera mengganti lewat **Pengaturan → Password akun**.
 
+### Tanpa terminal sama sekali (paling cepat)
+
+Kalau Anda sedang membuka dashboard Neon dan tidak ingin menyentuh terminal,
+Anda tetap butuh **hash** — hash tidak bisa dibuat oleh Postgres (aplikasi
+memakai scrypt Node, bukan `pgcrypto`). Dua cara mendapatkan hash tanpa
+terminal:
+
+1. minta rekan/CI menjalankan `npm run db:hash-password -- --password '...' --email <email>`
+   lalu kirimkan hash-nya; atau
+2. gunakan hash yang sudah dibuat dan diverifikasi sebelumnya (catat di tempat
+   aman, lalu **segera ganti password** setelah berhasil masuk).
+
+Setelah hash tersedia, tempel SQL berikut di **Neon → SQL Editor** (bukan
+perintah `npm`, itu untuk terminal):
+
+```sql
+begin;
+
+-- Ganti hash di bawah dengan hash 161 karakter milik Anda.
+update users
+   set password_hash = '<HASH_161_KARAKTER>',
+       failed_login_count = 0,   -- hapus dua baris ini bila migrasi 0010 belum dijalankan
+       locked_until = null
+ where email = 'admin@ardaya.id';
+
+delete from sessions
+ where user_id = (select id from users where email = 'admin@ardaya.id');
+
+commit;
+```
+
+Periksa hasilnya (harus `161`):
+
+```sql
+select email, length(password_hash) as panjang, failed_login_count, locked_until
+  from users where email = 'admin@ardaya.id';
+```
+
+Bila `failed_login_count` / `locked_until` belum ada, artinya migrasi `0010`
+belum diterapkan — jalankan dulu `npm run db:migrate`, atau pakai varian minimal:
+
+```sql
+begin;
+update users set password_hash = '<HASH_161_KARAKTER>' where email = 'admin@ardaya.id';
+delete from sessions where user_id = (select id from users where email = 'admin@ardaya.id');
+commit;
+```
+
+> **Kesalahan yang sering terjadi:** menempel `npm run db:hash-password …` ke
+> SQL Editor Neon → `ERROR: syntax error at or near "npm" (SQLSTATE 42601)`.
+> Neon hanya menjalankan SQL; `npm run …` dijalankan di terminal pada folder repo.
+
 ### Lewat table editor / SQL editor Neon
 
 Cara paling cepat bila Anda sudah membuka dashboard Neon — tetapi **jangan
