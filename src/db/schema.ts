@@ -398,7 +398,37 @@ export const scheduleItems = pgTable("schedule_items", {
   progressPct: numeric("progress_pct", { precision: 5, scale: 2 }).notNull().default("0"),
   status: text("status").notNull().default("NOT_STARTED"),
   sortOrder: integer("sort_order").notNull().default(0),
-});
+  // S5 (0009): WBS hierarki, kode, komitmen vendor, distribusi rencana kurva-S.
+  level: integer("level").notNull().default(1),
+  code: text("code"),
+  isSummary: boolean("is_summary").notNull().default(false),
+  committedAmount: money("committed_amount").notNull().default("0"),
+  plannedPctPerPeriod: numeric("planned_pct_per_period", { precision: 9, scale: 4 }),
+  parentSortOrder: integer("parent_sort_order").notNull().default(0),
+}, (table) => [
+  uniqueIndex("schedule_items_project_code_idx").on(table.companyId, table.projectId, table.code).where(sql`code IS NOT NULL`),
+  index("schedule_items_project_level_idx").on(table.companyId, table.projectId, table.level, table.sortOrder),
+  index("schedule_items_parent_idx").on(table.companyId, table.parentId),
+]);
+
+/** S5: kalender WBS per versi — Σ bobot aktivitas 100% & progres terbobot. */
+export const projectWbsCalendars = pgTable("project_wbs_calendars", {
+  id: id(),
+  companyId: uuid("company_id").notNull().default(sql`app_current_company_id()`),
+  projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  version: integer("version").notNull().default(1),
+  status: text("status").notNull().default("DRAFT"),
+  startDate: date("start_date"),
+  totalWeight: numeric("total_weight", { precision: 7, scale: 2 }).notNull().default("0"),
+  itemCount: integer("item_count").notNull().default(0),
+  weightedProgress: numeric("weighted_progress", { precision: 7, scale: 2 }).notNull().default("0"),
+  note: text("note"),
+  lockedAt: timestamp("locked_at", { withTimezone: true }),
+  lockedById: text("locked_by_id").references(() => users.id),
+  createdById: text("created_by_id").references(() => users.id),
+  createdAt: createdAt(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [uniqueIndex("project_wbs_calendars_version_idx").on(table.companyId, table.projectId, table.version)]);
 
 export const progressUpdates = pgTable("progress_updates", {
   id: id(),

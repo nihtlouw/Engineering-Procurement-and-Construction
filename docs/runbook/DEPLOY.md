@@ -189,6 +189,37 @@ Urutan: backup → `npm run db:migrate -- --check` → `npm run db:migrate` → 
 
 Rincian: [`docs/modules/DOCUMENT-GENERATOR.md`](../modules/DOCUMENT-GENERATOR.md).
 
+## Deploy WBS & kurva-S (`0009_wbs_scurve.sql`)
+
+Migrasi **forward-only** pada tabel jadwal yang sudah berisi data: 6 kolom baru di
+`schedule_items` + backfill, 1 tabel baru `project_wbs_calendars`, dan 2 FK parsial
+dari RAB ke WBS. Semua langkah idempoten (`IF NOT EXISTS`, `DO $$ ... $$`) sehingga
+aman diulang bila render Neon memutus koneksi.
+
+**Backup wajib** sebelum menjalankan: `pg_dump --schema=public` ke object storage.
+Backfill menulis `code`, `level`, dan `planned_pct_per_period` pada baris lama;
+DB dengan item jadwal dalam jumlah besar akan menahan lock tulis singkat.
+
+Urutan: backup → `npm run db:migrate -- --check` → `npm run db:migrate` → `npm run db:verify` → deploy → smoke test tab **Jadwal & Progres**.
+
+| # | Kriteria S5 | Cara |
+|---|---|---|
+| 1 | Rangkaian 0000–0009 tereksekusi (34 tabel FORCE RLS, 136 policy) | `npx vitest run tests/unit/migrations.test.ts` (49 test) |
+| 2 | `db:verify` melaporkan 3 pemeriksaan 0009 lulus | `npm run db:verify` → “0009 kolom WBS”, “0009 kalender WBS terisolasi”, “0009 backfill WBS” PASS |
+| 3 | Semua item jadwal lama punya kode & level | `select count(*) from schedule_items where code is null or level is null` → 0 |
+| 4 | Σ bobot ≠ 100% ditolak | UAT: ubah satu bobot → Simpan → 422 `WBS_WEIGHT_TOTAL`; centang draft (`allowIncomplete`) → tersimpan tapi pita Σ berwarna merah |
+| 5 | Kode WBS unik per proyek | UAT: tambah item baru → kode `WBS-002` otomatis; dua proyek berbeda boleh sama-sama `WBS-001` |
+| 6 | Hapus induk menghapus turunannya dan tercatat di audit | UAT: hapus grup berisi 2 aktivitas → hitung ulang item; log `WBS_SAVED` memuat `removed: 3` |
+| 7 | Kurva-S rencana berakhir 100% dan aktual berhenti di laporan terakhir | UAT: isi tanggal rencana 4 minggu → kurva naik ke 100%; catat progres 2 minggu → minggu ke-3/4 kosong, bukan 0 |
+| 8 | Penguncian kalender menuntut alasan dan bobot 100% | UAT: **Kunci kalender** dengan alasan 3 karakter → tombol nonaktif; API → 422; alasan ≥5 karakter → status LOCKED + audit `CALENDAR_LOCKED` |
+| 9 | Setelah LOCK, non-ADMIN tidak bisa mengubah WBS | UAT: login PM → editor baca-saja; kirim `PUT /wbs` → 409/403 |
+| 10 | Proyek COMPLETED hanya bisa diubah ADMIN | UAT: proyek berstatus COMPLETED → `PUT /wbs` sebagai PM → 409 `PROJECT_LOCKED` |
+| 11 | Peran tanpa `schedule.edit` tidak bisa menyimpan | UAT: login FIELD/CLIENT_VIEWER → panel read-only, API → 403 `FORBIDDEN` |
+| 12 | Tautan RAB → WBS menolak ID lintas proyek | UAT: `POST /wbs/action` `LINK_BUDGET_LINE` dengan baris RAB proyek lain → 404 `WBS_ITEM_NOT_FOUND`/`NOT_FOUND` |
+| 13 | Build/typecheck/lint/test/audit hijau | `npm run typecheck && npm run lint && npm test && npm audit --omit=dev --audit-level=high` |
+
+Rincian: [`docs/modules/WBS-SCURVE.md`](../modules/WBS-SCURVE.md).
+
 ## Variabel environment
 
 | Variabel | Wajib | Catatan |

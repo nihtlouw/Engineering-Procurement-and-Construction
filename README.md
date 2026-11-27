@@ -4,7 +4,7 @@ Aplikasi manajemen proyek EPC: proyek & klien, PO, RAB, biaya, tagihan, dokumen,
 **Modular monolith**: Next.js 16 App Router · React 19 · TypeScript (strict) · Tailwind 4 · Drizzle ORM + `pg` → PostgreSQL (Neon/Supabase) · Zod · decimal.js · pdf-lib · exceljs. Deploy: Vercel.
 
 > Baseline kondisi & roadmap: [`docs/AUDIT-EPC-2026-11-17.md`](docs/AUDIT-EPC-2026-11-17.md).
-> Status saat ini: **S1 + S2a + S2b + S3 + hardening-1 + master data + termin/katalog + S4 Document Generator** — fondasi company/RLS/Auth, RAB/PTK, PO/termin/CO, foto lapangan dalam PDF laporan, guard PO/invoice + isolasi notifikasi, **CRUD proyek/klien/site/anggota**, **termin kontrak & katalog biaya dari UI** (migrasi `0007`), dan **template dokumen di DB + upload DOCX + editor blok visual + PDF/DOCX ke object storage + arsip** (migrasi `0008`). **S5 kurva-S (WBS & plan vs actual) berikutnya.**
+> Status saat ini: **S1 + S2a + S2b + S3 + hardening-1 + master data + termin/katalog + S4 Document Generator + S5 WBS & kurva-S** — fondasi company/RLS/Auth, RAB/PTK, PO/termin/CO, foto lapangan dalam PDF laporan, guard PO/invoice + isolasi notifikasi, **CRUD proyek/klien/site/anggota**, **termin kontrak & katalog biaya dari UI** (migrasi `0007`), **template dokumen di DB + upload DOCX + editor blok visual + PDF/DOCX ke object storage + arsip** (migrasi `0008`), dan **WBS hierarki Σ bobot 100% + kalender terkunci + kurva-S rencana vs aktual per minggu** (migrasi `0009`). **S6 referensi harga berikutnya.**
 
 ## Setup lokal
 
@@ -70,6 +70,17 @@ Rincian: [`docs/modules/PROCUREMENT-TERMIN-CO.md`](docs/modules/PROCUREMENT-TERM
 
 Rincian: [`docs/modules/FIELD-PHOTOS.md`](docs/modules/FIELD-PHOTOS.md).
 
+## S5 — WBS & kurva-S
+
+- WBS 4 level per proyek (maks **300 item**): grup ringkasan (`is_summary`, bobot 0) dan aktivitas berbobot. Kode otomatis `WBS-001` / `3.1` / `3.1.2`, unik per proyek lewat partial unique index.
+- Σ bobot **aktivitas** harus 100% (toleransi 0,0001) sebelum kurva-S dianggap final; `allowIncomplete` hanya untuk draft. Simpan bersifat *replace-by-set* dalam satu transaksi (item yang dihapus ikut terhapus berjenjang) dan menulis audit `WBS_SAVED` berisi `itemCount/removed/totalWeight/weightedProgress`.
+- Kurva-S dihitung **per minggu ISO (Senin)**: bobot tiap aktivitas disebar linier pada `planned_start → planned_end`; aktual kumulatif berasal dari delta `progress_updates`. Minggu tanpa laporan di tengah kurva memakai nilai terakhir, minggu setelah laporan terakhir tetap kosong (bukan proyeksi). Status `AHEAD | ON_TRACK | BEHIND` dari selisih kumulatif ±0,5 poin.
+- Setelah baseline disetujui, kalender WBS dikunci (`project_wbs_calendars` DRAFT → LOCKED, alasan wajib ≥5 karakter, audit `CALENDAR_LOCKED`). Setelah terkunci hanya ADMIN yang dapat mengubah WBS; versi baru tercatat sebagai riwayat.
+- `budget_lines.wbs_item_id` / `budget_phasing.wbs_item_id` memungkinkan RAB dan distribusi biaya menempel ke aktivitas WBS, ditambah komentar rekonsiliasi berjenis audit — jadi bobot jadwal dan bobot biaya bisa dibandingkan tanpa menyatukan keduanya secara paksa.
+- UI: tab **Jadwal & Progres** kini berisi editor pohon WBS + grafik kurva-S SVG (tanpa dependensi chart), dan dashboard menampilkan Σ bobot serta progres terbobot per proyek.
+
+Rincian: [`docs/modules/WBS-SCURVE.md`](docs/modules/WBS-SCURVE.md).
+
 ## Perintah
 
 | Perintah | Kegunaan |
@@ -109,6 +120,7 @@ src/
 ├── modules/budgeting/    # S2a: types, validation, pagu, service, UI
 ├── modules/procurement/  # S2b: types, validation, service, UI
 ├── modules/field-photos/ # S3: validation, filter, image, storage, service, UI
+├── modules/wbs/          # S5: types (matematika kurva-S), validation, service
 ├── app/api/              # route handler, dibungkus companyRoute()/publicRoute()
 ├── app/accept-invite/    # halaman penerimaan undangan
 ├── modules/companies/    # modul pertama: types, validation, service, ui
@@ -129,6 +141,7 @@ tests/                    # unit + integrasi
 - `docs/modules/FIELD-PHOTOS.md` — desain S3, storage, `{{#photos}}`, keamanan, dan acceptance criteria.
 - `docs/modules/HARDENING-1.md` — migrasi `0005`: guard PO, pemisahan tugas invoice, isolasi notifikasi, ekspor fail-closed.
 - `docs/modules/MASTER-DATA.md` — migrasi `0006`: wizard proyek, CRUD klien/site/anggota, kode unik per company.
+- `docs/modules/WBS-SCURVE.md` — migrasi `0009`: WBS hierarki, Σ bobot, kalender terkunci, matematika kurva-S & status.
 - `docs/modules/DOCUMENT-GENERATOR.md` — migrasi `0008`: template dokumen di DB, upload DOCX, editor blok visual, PDF+DOCX final, revisi & arsip.
 - `docs/modules/TERMS-CATALOG.md` — migrasi `0007`: termin kontrak dari UI (komposisi persen 100%, penutupan teraudit) & katalog kategori biaya/satuan per company.
 - `docs/TUTORIAL-DAN-UJI-SCOPE.md` — tutorial & skenario uji (sebagian mengacu UI pra-S1).

@@ -154,6 +154,31 @@ async function main() {
     const docColumnCount = Number(docColumns.rows[0].n);
     check("0008 documents DOCX & arsip", docColumnCount === 3,
       docColumnCount === 3 ? "template_id, docx_file_id, archived_at ada" : `${docColumnCount}/3 kolom dokumen baru — jalankan 0008`);
+
+    // ---- 0009: WBS & kurva-S ------------------------------------------------
+    const wbsColumns = await db.query(`SELECT count(*)::int AS n FROM information_schema.columns
+      WHERE table_schema='public' AND table_name='schedule_items'
+        AND column_name IN ('level','code','is_summary','committed_amount','planned_pct_per_period','parent_sort_order')`);
+    const wbsColumnCount = Number(wbsColumns.rows[0].n);
+    check("0009 kolom WBS schedule_items", wbsColumnCount === 6,
+      wbsColumnCount === 6 ? "level, code, is_summary, committed_amount, planned_pct_per_period, parent_sort_order ada" : `${wbsColumnCount}/6 kolom WBS — jalankan migrasi 0009`);
+
+    const calendarTable = await db.query(`SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE relname='project_wbs_calendars' AND relkind='r'`);
+    const calendarPolicies = await db.query(`SELECT count(*)::int AS n FROM pg_policy p JOIN pg_class c ON c.oid=p.polrelid WHERE c.relname='project_wbs_calendars'`);
+    check("0009 kalender WBS terisolasi", calendarTable.rows.length === 1
+      && calendarTable.rows[0].relrowsecurity === true && calendarTable.rows[0].relforcerowsecurity === true
+      && Number(calendarPolicies.rows[0].n) === 4,
+      calendarTable.rows.length === 1
+        ? `RLS FORCE aktif, ${calendarPolicies.rows[0].n}/4 policy`
+        : "tabel project_wbs_calendars belum ada — jalankan migrasi 0009");
+
+    const wbsBackfill = await db.query(`SELECT
+        count(*) FILTER (WHERE code IS NULL OR level IS NULL)::int AS missing,
+        count(*)::int AS total FROM schedule_items`);
+    check("0009 backfill WBS", Number(wbsBackfill.rows[0].missing) === 0,
+      Number(wbsBackfill.rows[0].missing) === 0
+        ? `${wbsBackfill.rows[0].total} item jadwal punya kode & level`
+        : `${wbsBackfill.rows[0].missing}/${wbsBackfill.rows[0].total} item belum berkode — ulangi migrasi 0009`);
   } finally {
     // Bersihkan data uji.
     try {

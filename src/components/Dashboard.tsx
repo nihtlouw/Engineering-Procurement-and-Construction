@@ -4,6 +4,7 @@ import { AlertTriangle, ArrowRight, CheckCircle2, ClipboardCheck, FileWarning, F
 import type { AppData, ProjectView } from "@/components/types";
 import { Badge, Button, DataTable, EmptyState, SegmentedControl } from "@/components/ui";
 import { D, formatDate, formatIDR, todayJakarta } from "@/lib/format";
+import { summarizeWeights, type WbsItemLike } from "@/modules/wbs/types";
 
 /* Ikhtisar portofolio — desain v2 "Signal": pita kinerja + tabel padat.
    Tidak ada hero pemasaran atau parallax: yang pertama terlihat adalah pekerjaan. */
@@ -31,6 +32,18 @@ export default function Dashboard({ data, onOpenProject, onCreateExpense, onNavi
   /* Kurva kumulatif biaya aktual (disetujui, bukan VOID) sepanjang tahun berjalan.
      Dihitung dari tanggal transaksi di data yang sudah dimuat — bukan estimasi. */
   const curve = buildCumulative(data.expenses);
+
+  /* S5: bobot & progres terbobot dari data jadwal yang sudah dimuat. Proyek
+     dengan Σ bobot ≠ 100% ditandai agar kurva-S tidak dianggap final. */
+  const scurve = data.projects.map((project) => {
+    const items = data.schedule.filter((item) => item.projectId === project.id) as unknown as (WbsItemLike & { projectId: string })[];
+    const summary = summarizeWeights(items);
+    return {
+      projectId: project.id, code: project.code, activityCount: summary.activityCount,
+      weight: summary.activityWeight, progress: summary.weightedProgress,
+      weightOk: Math.abs(summary.activityWeight - 100) <= 0.01 && summary.activityCount > 0,
+    };
+  }).filter((row) => row.activityCount > 0);
 
   const actions = [
     ...overdueInvoices.map((i) => ({ id: i.id, tone: "danger" as const, icon: FileWarning, title: i.number, meta: `${i.projectCode} · saldo ${formatIDR(i.balance)} · tempo ${formatDate(i.dueDate)}`, badge: "OVERDUE", view: "invoices" })),
@@ -156,6 +169,28 @@ export default function Dashboard({ data, onOpenProject, onCreateExpense, onNavi
               ]}
             />
           ) : <EmptyState icon={<Receipt size={16} />} title="Belum ada pengeluaran" description="Nota lapangan yang dicatat akan tampil di sini beserta status persetujuannya." />}
+        </section>
+
+        <section className="rounded-[var(--radius-card)] border border-line bg-surface">
+          <header className="flex items-center justify-between border-b border-line px-4 py-3">
+            <h2 className="text-[13px] font-semibold">Bobot WBS & kurva-S</h2>
+            <span className="text-[11.5px] text-muted">{scurve.length} proyek</span>
+          </header>
+          {scurve.length ? <div>
+            {scurve.slice(0, 5).map((row) => (
+              <button key={row.projectId} onClick={() => onOpenProject(row.projectId)} className="block w-full border-b border-hairline px-4 py-2.5 text-left last:border-0 hover:bg-paper">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="mono text-[10.5px] text-subtle">{row.code}</span>
+                  <span className={`text-[10.5px] font-semibold ${row.weightOk ? "text-ok" : "text-danger"}`}>Σ {row.weight.toFixed(2)}%</span>
+                </div>
+                <div className="mt-1 flex items-baseline justify-between text-[11px] text-muted">
+                  <span>{row.activityCount} aktivitas · progres terbobot</span>
+                  <span className="mono font-semibold text-ink">{row.progress.toFixed(1)}%</span>
+                </div>
+                <div className="meter mt-1"><i data-tone={row.weightOk ? "ink" : "bad"} style={{ width: `${Math.min(100, Math.max(row.progress, row.weight))}%` }} /></div>
+              </button>
+            ))}
+          </div> : <p className="px-4 py-6 text-[12.5px] text-muted">Belum ada WBS berbobot untuk proyek dalam cakupan Anda.</p>}
         </section>
 
         <section className="rounded-[var(--radius-card)] border border-line bg-surface">

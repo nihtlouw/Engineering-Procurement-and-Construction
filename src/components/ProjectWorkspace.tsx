@@ -9,6 +9,7 @@ import { LABELS, STAGES } from "@/lib/domain";
 import BudgetingPanel from "@/modules/budgeting/ui/BudgetingPanel";
 import FieldPhotosPanel from "@/modules/field-photos/ui/FieldPhotosPanel";
 import ProcurementS2bPanel from "@/modules/procurement/ui/ProcurementPanel";
+import WbsPanel from "@/components/schedule/WbsPanel";
 import { api, uuid } from "@/lib/client";
 import { D, formatDate, formatIDR, todayJakarta } from "@/lib/format";
 
@@ -126,7 +127,17 @@ function BudgetPanel({ data, project }: Props) {
   );
 }
 
+/* Tab **Jadwal** = dua bagian: WBS/kurva-S (S5: CRUD hierarki, Σ bobot 100%,
+ * rencana vs aktual) di atas, lalu daftar jadwal lama + jejak update lapangan
+ * yang tetap dipakai tim lapangan untuk melaporkan progres harian. */
 function SchedulePanel({ data, project, onSaved }: Props) {
+  return <div className="space-y-6">
+    <WbsPanel data={data} project={project} onSaved={onSaved} />
+    <ProgressLog data={data} project={project} onSaved={onSaved} />
+  </div>;
+}
+
+function ProgressLog({ data, project, onSaved }: { data: AppData; project: ProjectView; onSaved: Notify }) {
   const items = data.schedule.filter((s) => s.projectId === project.id); const updates = data.progressUpdates.filter((p) => p.projectId === project.id); const [selected, setSelected] = useState<ScheduleView | null>(null); const [saving, setSaving] = useState(false); const [error, setError] = useState(""); const [form, setForm] = useState({ progressPct: "", reportDate: todayJakarta(), note: "", issue: "", quantity: "", unitCode: "" });
   const open = (item: ScheduleView) => { setSelected(item); setForm({ progressPct: item.progressPct, reportDate: todayJakarta(), note: "", issue: "", quantity: "", unitCode: "" }); };
   const save = async () => { if (!selected) return; setSaving(true); setError(""); try { await api(`/api/schedule/${selected.id}/progress`, { method: "POST", body: JSON.stringify({ ...form, clientUuid: uuid() }) }); onSaved(`Progres “${selected.name}” berhasil diperbarui.`); setSelected(null); } catch (e) { setError(e instanceof Error ? e.message : "Update gagal"); } finally { setSaving(false); } };
