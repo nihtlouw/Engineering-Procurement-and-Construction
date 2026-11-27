@@ -1,6 +1,8 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Building2, MapPin, Pencil, Plus, Trash2, UserRoundPlus, Users } from "lucide-react";
+import CatalogTab from "@/components/master-data/CatalogTab";
+import TermsTab from "@/components/master-data/TermsTab";
 import type { AppData, ProjectView } from "@/components/types";
 import { Badge, Button, EmptyState, Field, Input, Modal, SectionTitle, Select, Textarea } from "@/components/ui";
 import {
@@ -15,19 +17,25 @@ import { formatDate, formatIDR } from "@/lib/format";
  * `scripts/seed-demo.ts`. Layar ini menutup celah tersebut dengan wizard 3 langkah
  * (proyek → kontrak → tim) memakai endpoint `/api/projects` + `/api/clients` + `/api/sites`. */
 
-type Tab = "projects" | "clients" | "sites" | "members";
+type Tab = "projects" | "clients" | "sites" | "members" | "terms" | "catalog";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "projects", label: "Proyek" },
   { id: "clients", label: "Klien" },
   { id: "sites", label: "Site" },
   { id: "members", label: "Anggota" },
+  { id: "terms", label: "Termin" },
+  { id: "catalog", label: "Katalog" },
 ];
 
 const today = () => new Date().toISOString().slice(0, 10);
 
 export default function MasterDataView({ data, onSaved }: { data: AppData; onSaved: (message: string) => void }) {
   const canEdit = data.user.permissions.includes("schedule.edit");
+  // Termin = pagu invoice klien; katalog = pagar biaya (izin sama dengan server).
+  // Sama dengan server: tim invoice atau penyetuju RAB klien.
+  const canEditTerms = data.user.permissions.includes("invoice.edit") || data.user.permissions.includes("budget.approve");
+  const canManageCatalog = data.user.permissions.includes("settings.manage") || data.user.permissions.includes("budget.edit");
   const [tab, setTab] = useState<Tab>("projects");
   const [error, setError] = useState("");
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -51,8 +59,8 @@ export default function MasterDataView({ data, onSaved }: { data: AppData; onSav
     <div>
       <SectionTitle
         eyebrow="Master data"
-        title="Proyek, klien, site & anggota"
-        description="Buat proyek baru tanpa menyentuh kode/seed. Tahap awal proyek selalu Menunggu Kickoff, lalu naik lewat gerbang tahap di workspace proyek."
+        title="Proyek, klien, site, termin & katalog"
+        description="Buat proyek baru tanpa menyentuh kode/seed. Tahap awal proyek selalu Menunggu Kickoff, lalu naik lewat gerbang tahap di workspace proyek. Termin kontrak dan kategori biaya juga dikelola di sini."
         action={canEdit ? (
           <div className="flex flex-wrap gap-2">
             {tab === "projects" ? <Button variant="lime" onClick={() => { setError(""); setWizardOpen(true); }}><Plus size={15} />Proyek baru</Button> : null}
@@ -140,6 +148,9 @@ export default function MasterDataView({ data, onSaved }: { data: AppData; onSav
           </div>
         )
       ) : null}
+
+      {tab === "terms" ? <TermsTab projects={projects} canEdit={canEditTerms} onSaved={onSaved} /> : null}
+      {tab === "catalog" ? <CatalogTab canManage={canManageCatalog} onSaved={onSaved} /> : null}
 
       {tab === "members" ? <MembersTab data={data} canEdit={canEdit} selected={memberProjectId} onSelect={setMemberProjectId} onSaved={onSaved} onNeedOptions={loadOptions} /> : null}
 

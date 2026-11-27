@@ -4,7 +4,7 @@ Aplikasi manajemen proyek EPC: proyek & klien, PO, RAB, biaya, tagihan, dokumen,
 **Modular monolith**: Next.js 16 App Router · React 19 · TypeScript (strict) · Tailwind 4 · Drizzle ORM + `pg` → PostgreSQL (Neon/Supabase) · Zod · decimal.js · pdf-lib · exceljs. Deploy: Vercel.
 
 > Baseline kondisi & roadmap: [`docs/AUDIT-EPC-2026-11-17.md`](docs/AUDIT-EPC-2026-11-17.md).
-> Status saat ini: **S1 + S2a + S2b + S3 selesai + hardening-1 + master data** — fondasi company/RLS/Auth, RAB/PTK, PO/termin/CO, foto lapangan dalam PDF laporan, guard PO/invoice + isolasi notifikasi, serta **CRUD proyek/klien/site/anggota** (proyek baru tanpa seed). **S4 Document Generator penuh ditunda.**
+> Status saat ini: **S1 + S2a + S2b + S3 selesai + hardening-1 + master data + termin/katalog** — fondasi company/RLS/Auth, RAB/PTK, PO/termin/CO, foto lapangan dalam PDF laporan, guard PO/invoice + isolasi notifikasi, **CRUD proyek/klien/site/anggota** (proyek baru tanpa seed), serta **termin kontrak & katalog biaya dari UI** (migrasi `0007`). **S4 Document Generator penuh ditunda.**
 
 ## Setup lokal
 
@@ -129,6 +129,7 @@ tests/                    # unit + integrasi
 - `docs/modules/FIELD-PHOTOS.md` — desain S3, storage, `{{#photos}}`, keamanan, dan acceptance criteria.
 - `docs/modules/HARDENING-1.md` — migrasi `0005`: guard PO, pemisahan tugas invoice, isolasi notifikasi, ekspor fail-closed.
 - `docs/modules/MASTER-DATA.md` — migrasi `0006`: wizard proyek, CRUD klien/site/anggota, kode unik per company.
+- `docs/modules/TERMS-CATALOG.md` — migrasi `0007`: termin kontrak dari UI (komposisi persen 100%, penutupan teraudit) & katalog kategori biaya/satuan per company.
 - `docs/TUTORIAL-DAN-UJI-SCOPE.md` — tutorial & skenario uji (sebagian mengacu UI pra-S1).
 - `docs/RINGKASAN-DESAIN-UI.md` — keputusan desain antarmuka.
 - `public/docs/Panduan-Ardaya-EPC.pdf` — panduan pemakaian (21 halaman, bahasa Indonesia).
