@@ -352,6 +352,8 @@ export const customerInvoices = pgTable("customer_invoices", {
   sentAt: timestamp("sent_at", { withTimezone: true }),
   cancelReason: text("cancel_reason"),
   overInvoiceReason: text("over_invoice_reason"),
+  // 0005: jejak pembuat dipakai pemisahan tugas (pembuat ≠ penyetuju).
+  createdById: text("created_by_id").references(() => users.id, { onDelete: "set null" }),
   createdAt: createdAt(),
 });
 

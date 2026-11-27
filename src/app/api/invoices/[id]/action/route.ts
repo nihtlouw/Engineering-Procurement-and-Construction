@@ -6,6 +6,7 @@ import { activityLogs, customerInvoices, customerPayments } from "@/db/schema";
 import { ApiError, assertPermission, errorResponse, requireUser } from "@/lib/auth";
 import { INVOICE_TRANSITIONS } from "@/lib/domain";
 import { assertTransition, newId, requireProject, requiredReason } from "@/lib/server-services";
+import { assertInvoiceSeparationOfDuty } from "@/modules/procurement/service";
 
 const schema = z.object({ action: z.enum(["APPROVE", "SEND", "CANCEL"]), reason: z.string().optional() });
 async function POSTHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -14,6 +15,9 @@ async function POSTHandler(request: Request, { params }: { params: Promise<{ id:
     const [invoice] = await db.select().from(customerInvoices).where(eq(customerInvoices.id, id)).limit(1);
     if (!invoice) throw new ApiError("NOT_FOUND", "Invoice tidak ditemukan.", 404);
     await requireProject(user, invoice.projectId, body.action === "APPROVE" ? "invoice.approve" : "invoice.edit");
+    // DOM-07: pembuat invoice tidak boleh menyetujui invoice-nya sendiri (ADMIN = override).
+    // Invoice lama (pra-0005) bisa punya createdById NULL → aturan hanya berlaku bila diketahui.
+    if (invoice.createdById) assertInvoiceSeparationOfDuty({ action: body.action, createdById: invoice.createdById, actorId: user.id, actorRole: user.role });
     const next = assertTransition(INVOICE_TRANSITIONS, invoice.status, body.action);
     if (body.action === "CANCEL") {
       requiredReason(body.reason, "Alasan pembatalan"); assertPermission(user, "invoice.approve");

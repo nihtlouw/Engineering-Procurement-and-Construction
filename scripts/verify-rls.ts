@@ -99,6 +99,19 @@ async function main() {
     const nullable = contentColumn.rows[0]?.is_nullable === "YES";
     check("S3 content_base64 nullable", nullable,
       nullable ? "foto baru boleh menyimpan bytes di object storage" : "kolom belum nullable / tabel tidak ada");
+
+    // 8-9. Invariant 0005: jejak pembuat invoice + notifikasi hanya untuk pemiliknya.
+    const invoiceCreator = await db.query(`SELECT count(*)::int AS n FROM information_schema.columns
+      WHERE table_schema='public' AND table_name='customer_invoices' AND column_name='created_by_id'`);
+    const hasInvoiceCreator = Number(invoiceCreator.rows[0].n) === 1;
+    check("0005 customer_invoices.created_by_id", hasInvoiceCreator,
+      hasInvoiceCreator ? "pemisahan tugas invoice bisa ditegakkan" : "kolom belum ada — jalankan migrasi 0005");
+    const notificationPolicies = await db.query(`SELECT count(*)::int AS n FROM pg_policy p
+      JOIN pg_class c ON c.oid = p.polrelid
+      WHERE c.relname = 'notifications' AND p.polpermissive = false`);
+    const notificationPolicyCount = Number(notificationPolicies.rows[0].n);
+    check("0005 notifikasi per pengguna", notificationPolicyCount === 2,
+      `${notificationPolicyCount}/2 policy RESTRICTIVE (SELECT/UPDATE) pada notifications`);
   } finally {
     // Bersihkan data uji.
     try {

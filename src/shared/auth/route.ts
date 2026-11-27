@@ -20,6 +20,10 @@ export async function withCompany<T>(user: SessionUser, fn: () => Promise<T>): P
     // fail-closed: RAB INTERNAL tidak terlihat sama sekali.
     await tx.execute(sql`select set_config('app.current_company_id', ${user.companyId}, true)`);
     await tx.execute(sql`select set_config('app.current_permissions', ${user.permissions.join(",")}, true)`);
+    // 0005: policy RESTRICTIVE `notifications` membatasi SELECT/UPDATE ke user_id
+    // sendiri. Tanpa GUC ini, notifikasi pengguna lain di company sama akan ikut
+    // terkirim ke workspace (fail-closed bila kosong: 0 baris).
+    await tx.execute(sql`select set_config('app.current_user_id', ${user.id}, true)`);
     return runWithScope({ companyId: user.companyId, user, tx }, fn);
   });
 }

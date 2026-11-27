@@ -1,10 +1,10 @@
-# Runbook deploy — S1 / S2a / S2b / S3
+# Runbook deploy — S1 / S2a / S2b / S3 / hardening-1
 
 ## Urutan (jangan dibalik)
 
 1. **Backup** database produksi (snapshot + uji restore). Migrasi S1 menambah kolom `NOT NULL` + backfill; tidak ada down script.
 2. Set environment di Vercel: `DATABASE_URL`, `FILE_SIGNING_SECRET` (≥ 32 char acak), dan untuk S3 `FILE_STORAGE_DRIVER=s3` + kredensial bucket privat. Pastikan `SEED_DEMO_PASSWORD` **tidak** diset di production.
-3. Jalankan migrasi dari mesin yang punya akses DB (bukan dari Vercel runtime). Runner otomatis menerapkan `0000 → 0001 → 0002 → 0003 → 0004`:
+3. Jalankan migrasi dari mesin yang punya akses DB (bukan dari Vercel runtime). Runner otomatis menerapkan `0000 → 0001 → 0002 → 0003 → 0004 → 0005`:
    ```bash
    npm ci
    cp .env.example .env.local   # isi DATABASE_URL produksi
@@ -92,6 +92,29 @@ Urutan: backup → `npm run db:migrate -- --check` → `npm run db:migrate` → 
 
 Rincian: [`docs/modules/FIELD-PHOTOS.md`](../modules/FIELD-PHOTOS.md). **S4 Document Generator penuh tidak termasuk rilis ini.**
 
+## Deploy hardening-1 (`0005_hardening_invoice_notifications.sql`)
+
+Migrasi **forward-only**, non-destruktif: menambah `customer_invoices.created_by_id`
+(+ backfill dari `activity_logs`), fungsi `app_current_user_id()`, dan 2 policy
+RESTRICTIVE pada `notifications`. Backup tetap wajib (backfill mengubah data).
+
+Urutan: backup → `npm run db:migrate -- --check` → `npm run db:migrate` → `npm run db:verify`
+→ deploy aplikasi → smoke test.
+
+| # | Kriteria hardening-1 | Cara |
+|---|---|---|
+| 1 | Rangkaian 0000–0005 tereksekusi (30 tabel FORCE RLS, 124 policy) | `npm test -- tests/unit/migrations.test.ts` (PGlite) |
+| 2 | PO dengan tagihan aktif tidak bisa dibatalkan | `npm test -- tests/unit/procurement.test.ts`; UAT: buat PO → catat PO_BILL → coba batal → 409 `PO_HAS_BILLS` |
+| 3 | Pembuat invoice tidak bisa menyetujui sendiri | UAT: FINANCE buat invoice lalu Approve → 403 `SEPARATION_OF_DUTY`; user lain/ADMIN bisa |
+| 4 | Ekspor fail-closed | login FIELD → `GET /api/export/invoices` → 403; `GET /api/export/expenses` → 200 |
+| 5 | RAB internal tidak terekspor tanpa izin | login PROCUREMENT → `GET /api/export/budget` → hanya baris `CLIENT` |
+| 6 | Notifikasi hanya milik sendiri | login 2 user berbeda → buka panel notifikasi → tidak ada notifikasi user lain |
+| 7 | Tandai dibaca berfungsi | klik "Tandai semua dibaca" → badge hilang setelah refresh |
+| 8 | Warning build `middleware` hilang | `env -u DATABASE_URL npm run build` → tanpa pesan deprecated |
+| 9 | Build/typecheck/lint/test/audit hijau | `npm run typecheck && npm run lint && npm test && npm audit --omit=dev --audit-level=high` |
+
+Rincian: [`docs/modules/HARDENING-1.md`](../modules/HARDENING-1.md).
+
 ## Variabel environment
 
 | Variabel | Wajib | Catatan |
@@ -109,8 +132,9 @@ Rincian: [`docs/modules/FIELD-PHOTOS.md`](../modules/FIELD-PHOTOS.md). **S4 Docu
 ## Catatan operasional & risiko sisa
 
 - **Koneksi pool + `SET LOCAL`**: `withCompany()` membungkus tiap request dalam transaksi. Jangan menambah query di luar `companyRoute()`/`withCompany()` — RLS akan menolaknya (fail-closed).
-- **`_migrations`** mencatat file yang sudah diterapkan; jangan mengedit file SQL yang sudah terpakai, buat file baru. `0002`, `0003`, dan `0004` wajib dijalankan manual sebelum production karena Vercel tidak menjalankan migrasi dari runtime aplikasi.
+- **`_migrations`** mencatat file yang sudah diterapkan; jangan mengedit file SQL yang sudah terpakai, buat file baru. `0002`, `0003`, `0004`, dan `0005` wajib dijalankan manual sebelum production karena Vercel tidak menjalankan migrasi dari runtime aplikasi.
 - **S2a/S2b `app.current_permissions`**: script SQL manual yang tidak menyetel GUC ini akan melihat 0 baris RAB internal (fail-closed) dan tidak dapat meloloskan over-invoice (butuh `invoice.approve`).
+- **`app.current_user_id` (0005)**: script SQL manual yang tidak menyetel GUC ini akan melihat 0 baris `notifications` (fail-closed). `withCompany()` sudah menyetelnya otomatis untuk seluruh route aplikasi.
 - **Rekalkulasi termin** saat `IMPLEMENT` melewati termin yang sudah ditagihkan (tidak menurunkan nilai di bawah tagihan). S2b memakai `contract_terms.invoiced_amount` yang dijaga trigger sebagai sumber kumulatif; termin `INVOICED` / `CLOSED` atau `is_auto_amount=false` tidak diubah otomatis.
 - **Keanggotaan proyek** (`project_members`) wajib ada untuk peran non-ADMIN; `npm run db:seed:demo` sudah mengisinya, produksi harus dipastikan manual.
 - **Control-plane belum di-RLS** (`users`, `sessions`, `companies`, `memberships`, `invitations`, `auth_events`, katalog). Akses dijaga di aplikasi; pemisahan role DB direncanakan S2.

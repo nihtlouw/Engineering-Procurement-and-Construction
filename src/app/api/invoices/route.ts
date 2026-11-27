@@ -34,7 +34,7 @@ async function POSTHandler(request: Request) {
       const number = body.number?.trim() || `${String(Number(row.value) + 1).padStart(3, "0")}/INV/EPC/${roman[issue.getMonth()]}/${year}`;
       const existing = await tx.select({ id: customerInvoices.id }).from(customerInvoices).where(eq(customerInvoices.number, number)).limit(1);
       if (existing.length) throw new ApiError("DUPLICATE_NUMBER", "Nomor invoice sudah digunakan.", 409);
-      await tx.insert(customerInvoices).values({ id, projectId: body.projectId, contractTermId: body.contractTermId, number, type: body.type, issueDate: body.issueDate, dueDate: body.dueDate, dppAmount: money(body.dppAmount), ppnAmount: money(body.ppnAmount), totalAmount: money(total), status: "DRAFT", overInvoiceReason: body.overInvoiceReason ?? null });
+      await tx.insert(customerInvoices).values({ id, projectId: body.projectId, contractTermId: body.contractTermId, number, type: body.type, issueDate: body.issueDate, dueDate: body.dueDate, dppAmount: money(body.dppAmount), ppnAmount: money(body.ppnAmount), totalAmount: money(total), status: "DRAFT", overInvoiceReason: body.overInvoiceReason ?? null, createdById: user.id });
       await tx.insert(activityLogs).values({ id: newId(), actorId: user.id, objectType: "INVOICE", objectId: id, projectId: body.projectId, action: "CREATED", reason: termCheck.warning, changes: [{ field: "totalAmount", old: null, new: money(total) }, { field: "status", old: null, new: "DRAFT" }] });
       return { id, number };
     });
