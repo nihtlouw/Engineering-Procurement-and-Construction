@@ -119,7 +119,12 @@ export async function getWorkspaceData(user: SessionUser): Promise<WorkspaceData
   const visibleInvoices = canInvoices ? allInvoicesWithPayments.filter((i) => allowedIds.includes(i.projectId)).map((invoice) => ({
     ...invoice, projectCode: projectRows.find((p) => p.id === invoice.projectId)?.code, balance: money(invoiceBalance(invoice)), displayStatus: displayInvoiceStatus(invoice),
   })) : [];
-  const visibleDocuments = hasPermission(user, "document.view") ? documentRows.filter((d) => !d.projectId || allowedIds.includes(d.projectId)).map((d) => ({ ...d, fileUrl: fileUrl(d.fileId), projectCode: projectRows.find((p) => p.id === d.projectId)?.code })) : [];
+  // S4: dokumen unggahan tidak punya template; arsip tetap terlihat dengan status ARCHIVED.
+  const visibleDocuments = hasPermission(user, "document.view") ? documentRows.filter((d) => !d.projectId || allowedIds.includes(d.projectId)).map((d) => ({
+    ...d, fileUrl: fileUrl(d.fileId),
+    docxUrl: fileUrl(d.docxFileId ?? null),
+    projectCode: projectRows.find((p) => p.id === d.projectId)?.code,
+  })) : [];
   // S3: CLIENT_VIEWER hanya menerima foto yang sudah diproyeksikan ke laporan.
   const visibleFieldPhotos = (await listWorkspaceFieldPhotos(user, allowedIds, expires))
     .filter((photo) => user.role !== "CLIENT_VIEWER" || photo.isSelectedForReport === true);

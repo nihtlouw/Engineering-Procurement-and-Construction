@@ -138,6 +138,22 @@ async function main() {
       WHERE table_schema='public' AND table_name='contract_terms' AND column_name='notes'`);
     check("0007 contract_terms.notes", Number(termNotes.rows[0].n) === 1,
       Number(termNotes.rows[0].n) === 1 ? "catatan termin tersedia" : "kolom belum ada — jalankan migrasi 0007");
+    // 12. Invariant 0008: template dokumen di DB (11 sistem) + tabel versi berversi.
+    const systemTemplates = await db.query(`SELECT count(*)::int AS n FROM document_templates
+      WHERE company_id IS NULL AND is_system`);
+    const templateCount = Number(systemTemplates.rows[0].n);
+    check("0008 template sistem", templateCount === 11,
+      templateCount === 11 ? "11 template bawaan tersedia untuk semua company" : `${templateCount}/11 template sistem — jalankan migrasi 0008`);
+    const templateTables = await db.query(`SELECT count(*)::int AS n FROM pg_class
+      WHERE relname IN ('document_templates','document_template_variables','document_template_versions') AND relkind='r'`);
+    const tableCount = Number(templateTables.rows[0].n);
+    check("0008 tabel template", tableCount === 3,
+      tableCount === 3 ? "templates + variabel + versi tersedia" : `${tableCount}/3 tabel template ada — jalankan migrasi 0008`);
+    const docColumns = await db.query(`SELECT count(*)::int AS n FROM information_schema.columns
+      WHERE table_schema='public' AND table_name='documents' AND column_name IN ('template_id','docx_file_id','archived_at')`);
+    const docColumnCount = Number(docColumns.rows[0].n);
+    check("0008 documents DOCX & arsip", docColumnCount === 3,
+      docColumnCount === 3 ? "template_id, docx_file_id, archived_at ada" : `${docColumnCount}/3 kolom dokumen baru — jalankan 0008`);
   } finally {
     // Bersihkan data uji.
     try {
