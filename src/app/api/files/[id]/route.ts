@@ -32,7 +32,18 @@ async function GETHandler(request: Request, { params }: { params: Promise<{ id: 
     }
     else if (file.uploadedById !== user.id && user.role !== "ADMIN") throw new ApiError("FORBIDDEN", "Anda tidak memiliki akses ke file ini.", 403);
     const buffer = await getObjectBuffer(file as StoredFile);
-    return new Response(new Uint8Array(buffer), { headers: { "Content-Type": file.mimeType, "Content-Length": String(buffer.length), "Content-Disposition": `inline; filename="${file.fileName.replace(/"/g, "")}"`, "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } });
+    /* Berkas CSV/HTML/SVG yang tersaji `inline` dapat mengeksekusi skrip pada
+       origin aplikasi. Tipe yang tidak dapat dirender aman dipaksa unduh, dan
+       CSP ketat ditambahkan untuk semua respons berkas (defense-in-depth bila
+       `nosniff` diabaikan peramban lama). */
+    const inlineSafe = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
+    const disposition = inlineSafe.has(file.mimeType) ? "inline" : "attachment";
+    return new Response(new Uint8Array(buffer), { headers: {
+      "Content-Type": file.mimeType, "Content-Length": String(buffer.length),
+      "Content-Disposition": `${disposition}; filename="${file.fileName.replace(/"/g, "")}"`,
+      "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff",
+      "Content-Security-Policy": "default-src 'none'; sandbox",
+    } });
   } catch (error) { return errorResponse(error); }
 }
 

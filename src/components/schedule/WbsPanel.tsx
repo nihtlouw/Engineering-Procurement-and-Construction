@@ -123,6 +123,7 @@ export default function WbsPanel({ data, project, onSaved }: {
             <span className={`inline-flex items-center gap-1 font-semibold ${deviation < -0.5 ? "text-danger" : deviation > 0.5 ? "text-ok" : "text-muted"}`}>
               <VerdictIcon size={13} />{verdictLabel} {deviation !== 0 ? `(${deviation > 0 ? "+" : ""}${deviation.toFixed(2)} poin)` : ""}
             </span>
+            <a href={`/api/export/schedule?projectId=${encodeURIComponent(project.id)}`} className="inline-flex h-8 items-center rounded-[var(--radius-control)] border border-line-strong bg-surface px-2.5 text-[11px] font-semibold text-ink transition-colors hover:border-ink">Ekspor Excel</a>
             <Button size="sm" variant="ghost" onClick={() => setShowTable((old) => !old)}>{showTable ? "Sembunyikan tabel" : "Lihat tabel"}</Button>
           </div>
         </div>

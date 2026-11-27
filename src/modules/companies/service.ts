@@ -18,13 +18,18 @@ export async function listMembers(companyId: string): Promise<MemberView[]> {
     .select({
       membershipId: memberships.id, userId: users.id, name: users.name, email: users.email,
       title: users.title, companyRole: memberships.companyRole, status: memberships.status,
-      joinedAt: memberships.joinedAt, invitedBy: memberships.invitedBy,
+      joinedAt: memberships.joinedAt, invitedBy: memberships.invitedBy, lockedUntil: users.lockedUntil,
     })
     .from(memberships)
     .innerJoin(users, eq(users.id, memberships.userId))
     .where(eq(memberships.companyId, companyId))
     .orderBy(desc(memberships.createdAt));
-  return rows.map((r) => ({ ...r, companyRole: r.companyRole as Role, joinedAt: r.joinedAt.toISOString() }));
+  const now = Date.now();
+  return rows.map((r) => ({
+    ...r, companyRole: r.companyRole as Role, joinedAt: r.joinedAt.toISOString(),
+    // Kunci yang sudah lewat waktu tidak ditampilkan: UI hanya perlu tahu yang aktif.
+    lockedUntil: r.lockedUntil && r.lockedUntil.getTime() > now ? r.lockedUntil.toISOString() : null,
+  }));
 }
 
 export async function listPendingInvites(companyId: string): Promise<PendingInviteView[]> {
@@ -166,6 +171,32 @@ export async function updateMembership(
     ],
   });
   return { companyRole: nextRole, status: nextStatus };
+}
+
+/**
+ * Membuka kunci login akun anggota (0010). Hanya ADMIN company ini yang boleh;
+ * `users.manage` diperiksa di route. Penghitung dikembalikan ke 0 sehingga
+ * ambang penguncian dihitung ulang dari awal.
+ */
+export async function unlockMember(
+  companyId: string, targetUserId: string, actorId: string,
+): Promise<{ unlocked: boolean; previousFailures: number }> {
+  const [target] = await db.select({ id: memberships.id }).from(memberships)
+    .where(and(eq(memberships.companyId, companyId), eq(memberships.userId, targetUserId)))
+    .limit(1);
+  if (!target) throw new ApiError("NOT_FOUND", "Anggota tidak ditemukan pada company ini.", 404);
+
+  const [account] = await baseDb.select({ failedLoginCount: users.failedLoginCount, lockedUntil: users.lockedUntil })
+    .from(users).where(eq(users.id, targetUserId)).limit(1);
+  if (!account) throw new ApiError("NOT_FOUND", "Akun tidak ditemukan.", 404);
+
+  await baseDb.update(users).set({ failedLoginCount: 0, lockedUntil: null }).where(eq(users.id, targetUserId));
+  await db.insert(activityLogs).values({
+    id: randomUUID(), objectType: "USER", objectId: targetUserId, action: "LOGIN_UNLOCKED",
+    actorId, companyId,
+    changes: [{ field: "lockedUntil", old: account.lockedUntil?.toISOString() ?? null, new: null }],
+  });
+  return { unlocked: true, previousFailures: account.failedLoginCount };
 }
 
 export function roleTitle(role: Role): string {

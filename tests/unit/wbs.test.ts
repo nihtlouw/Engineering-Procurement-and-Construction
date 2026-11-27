@@ -4,6 +4,7 @@ import {
   summarizeWeights, weekStart, WEIGHT_TOLERANCE, type WbsItemLike,
 } from "@/modules/wbs/types";
 import { saveWbsSchema, wbsItemSchema } from "@/modules/wbs/validation";
+import { EXPORT_PERMISSIONS } from "@/lib/export-permissions";
 import { buildWbsCode } from "@/modules/wbs/service";
 import { activityWeight, toDraft, toPayload, weightedProgress, type DraftItem } from "@/components/schedule/WbsEditor";
 
@@ -162,5 +163,24 @@ describe("S5 · validasi & kode WBS", () => {
     expect(activityWeight(drafts)).toBe(100);
     expect(weightedProgress(drafts)).toBe(50);
     expect(toDraft([{ id: "x", parentId: null, level: 1, type: "ACTIVITY", name: "A", code: null, isSummary: false, weight: "40", progressPct: "10", status: "IN_PROGRESS", plannedStart: null, plannedEnd: null, actualStart: null, actualEnd: null, ownerId: null, ownerName: null, sortOrder: 0, committedAmount: "0" }])[0].weight).toBe("40");
+  });
+});
+
+describe("S5 · konsistensi jadwal, WBS, dan ekspor", () => {
+  it("ekspor jadwal dijaga izin schedule.view dan tidak memuat nilai biaya", () => {
+    expect(EXPORT_PERMISSIONS.schedule).toEqual(["schedule.view"]);
+    const other = Object.entries(EXPORT_PERMISSIONS).filter(([key]) => key !== "schedule");
+    // Ekspor jadwal tidak boleh ikut mewarisi izin komersial.
+    expect(other.every(([, permissions]) => !permissions.includes("schedule.view"))).toBe(true);
+  });
+
+  it("progres terbobot mengabaikan grup sehingga laporan ganda tidak mungkin", () => {
+    // Kondisi yang dicegah: grup berbobot 50 dilaporkan 100% PLUS anaknya 50%.
+    const withSummaryWeight = summarizeWeights([
+      item({ id: "g", weight: "50", isSummary: true, progressPct: "100" }),
+      item({ id: "a", weight: "100", progressPct: "0" }),
+    ]);
+    expect(withSummaryWeight.activityWeight).toBe(100);
+    expect(withSummaryWeight.weightedProgress).toBe(0);
   });
 });

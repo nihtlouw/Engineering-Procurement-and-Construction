@@ -14,7 +14,7 @@ Migrasi SQL **berversi dan wajib** — `drizzle-kit push` hanya untuk percobaan 
 | `0007_terms_catalog.sql` | Termin & katalog: `contract_terms.notes`, UNIQUE `(company_id, project_id, sort_order)`, index `(company_id, project_id, type)`, trigger status dipertahankan, UNIQUE global `cost_categories.code`/`units.code` diganti UNIQUE parsial `(company_id, code) WHERE company_id IS NOT NULL`, plus `created_by_id`/`created_at` |
 | `0008_document_templates.sql` | S4: `document_templates` (+`document_template_variables`, `document_template_versions` FORCE RLS), `documents.template_id/template_name/template_snapshot/docx_file_id/archived_*`, `template_code` nullable, seed 11 template sistem |
 | `0009_wbs_scurve.sql` | S5: `schedule_items` + `level/code/is_summary/committed_amount/planned_pct_per_period/parent_sort_order` (backfill idempoten, UNIQUE `(company_id, project_id, code)`), FK parsial `budget_lines.wbs_item_id` & `budget_phasing.wbs_item_id`, tabel `project_wbs_calendars` (versi DRAFT→LOCKED, Σ bobot & progres terbobot) dengan 4 policy FORCE RLS |
-
+| `0010_login_lockout.sql` | Hardening-2: `users.failed_login_count` + `users.locked_until` (kunci akun setelah 10/20 kegagalan), CHECK rentang, index parsial `users_locked_until_idx` |
 ## Perintah
 
 ```bash

@@ -4,7 +4,7 @@ Aplikasi manajemen proyek EPC: proyek & klien, PO, RAB, biaya, tagihan, dokumen,
 **Modular monolith**: Next.js 16 App Router · React 19 · TypeScript (strict) · Tailwind 4 · Drizzle ORM + `pg` → PostgreSQL (Neon/Supabase) · Zod · decimal.js · pdf-lib · exceljs. Deploy: Vercel.
 
 > Baseline kondisi & roadmap: [`docs/AUDIT-EPC-2026-11-17.md`](docs/AUDIT-EPC-2026-11-17.md).
-> Status saat ini: **S1 + S2a + S2b + S3 + hardening-1 + master data + termin/katalog + S4 Document Generator + S5 WBS & kurva-S** — fondasi company/RLS/Auth, RAB/PTK, PO/termin/CO, foto lapangan dalam PDF laporan, guard PO/invoice + isolasi notifikasi, **CRUD proyek/klien/site/anggota**, **termin kontrak & katalog biaya dari UI** (migrasi `0007`), **template dokumen di DB + upload DOCX + editor blok visual + PDF/DOCX ke object storage + arsip** (migrasi `0008`), dan **WBS hierarki Σ bobot 100% + kalender terkunci + kurva-S rencana vs aktual per minggu** (migrasi `0009`). **S6 referensi harga berikutnya.**
+> Status saat ini: **S1 + S2a + S2b + S3 + hardening-1 + master data + termin/katalog + S4 Document Generator + S5 WBS & kurva-S** — fondasi company/RLS/Auth, RAB/PTK, PO/termin/CO, foto lapangan dalam PDF laporan, guard PO/invoice + isolasi notifikasi, **CRUD proyek/klien/site/anggota**, **termin kontrak & katalog biaya dari UI** (migrasi `0007`), **template dokumen di DB + upload DOCX + editor blok visual + PDF/DOCX ke object storage + arsip** (migrasi `0008`), dan **WBS hierarki Σ bobot 100% + kalender terkunci + kurva-S rencana vs aktual per minggu** (migrasi `0009`). **Hardening-2 (kunci login, jalur file, validasi isi, kebocoran tautan nota) sudah masuk; S6 referensi harga berikutnya.**
 
 ## Setup lokal
 
@@ -80,6 +80,15 @@ Rincian: [`docs/modules/FIELD-PHOTOS.md`](docs/modules/FIELD-PHOTOS.md).
 - UI: tab **Jadwal & Progres** kini berisi editor pohon WBS + grafik kurva-S SVG (tanpa dependensi chart), dan dashboard menampilkan Σ bobot serta progres terbobot per proyek.
 
 Rincian: [`docs/modules/WBS-SCURVE.md`](docs/modules/WBS-SCURVE.md).
+
+## Hardening-2 — temuan audit yang masih terbuka
+
+Tiga temuan lama ditutup tanpa menunggu sprint fitur:
+
+- **Jalur file (audit #6).** `POST /api/files` tidak lagi mempercayai `Content-Type` dari browser: tipe ditentukan dari **magic bytes** (`src/modules/files/validation.ts`), batas turun ke **10 MB**, dan byte ditulis ke object storage — `content_base64` tidak diisi lagi. `GET /api/files/:id` memaksa unduh untuk tipe yang tidak dapat dirender dan mengirim `CSP: default-src 'none'; sandbox`.
+- **Kebocoran tautan nota (audit #3).** URL berkas bertanda tangan (kredensial baca 5 menit) hanya dikirim ke pembuat, approver, ADMIN, dan FINANCE. `activity_logs.actorId` tidak lagi ikut ke klien.
+- **Kunci akun (audit #7).** `drizzle/0010_login_lockout.sql` menambah penghitung kegagalan persisten: 10 gagal → kunci 15 menit, 20 gagal → 60 menit. Login berhasil mereset penghitung; ADMIN membuka kunci lewat **Pengguna & peran → Buka kunci** (`LOGIN_UNLOCKED` di audit).
+- **Ekspor jadwal.** `GET /api/export/schedule` mengikuti izin yang sama dengan ekspor lain (`schedule.view`), dengan Σ bobot per proyek di baris pertama. Baris ringkasan WBS tidak dapat dilaporkan lewat `/api/schedule/:id/progress` (`WBS_SUMMARY_READONLY`) agar progres tidak terhitung ganda.
 
 ## Perintah
 

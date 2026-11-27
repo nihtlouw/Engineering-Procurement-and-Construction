@@ -361,6 +361,36 @@ export async function wbsOverview(user: SessionUser, projectIds: string[]) {
 }
 
 /** Dipakai dokumentasi generator: baris jadwal untuk template PROGRESS_REPORT. */
+/**
+ * Baris ekspor XLSX: seluruh item WBS satu proyek beserta hierarki, bobot,
+ * rencana, dan progres — plus ringkasan Σ bobot agar penerima langsung tahu
+ * apakah jadwal itu sudah final atau masih draft.
+ */
+export async function scheduleExportRows(projectId: string) {
+  const rows = await db.select().from(scheduleItems)
+    .where(eq(scheduleItems.projectId, projectId))
+    .orderBy(asc(scheduleItems.level), asc(scheduleItems.sortOrder));
+  const wbs = rows.map(toWbs);
+  const summary = summarizeWeights(wbs);
+  return {
+    summary,
+    rows: rows.map((row) => ({
+      code: row.code ?? "",
+      name: `${"  ".repeat(Math.max(0, row.level - 1))}${row.name}`,
+      level: row.level,
+      type: row.isSummary ? "RINGKASAN" : "AKTIVITAS",
+      weight: row.isSummary ? 0 : Number(row.weight ?? 0),
+      progress: Number(row.progressPct ?? 0),
+      plannedStart: row.plannedStart ?? "",
+      plannedEnd: row.plannedEnd ?? "",
+      actualStart: row.actualStart ?? "",
+      actualEnd: row.actualEnd ?? "",
+      status: row.status,
+      ownerName: "",
+    })),
+  };
+}
+
 export async function scheduleDocumentRows(projectId: string) {
   const rows = await db.select().from(scheduleItems)
     .where(eq(scheduleItems.projectId, projectId))

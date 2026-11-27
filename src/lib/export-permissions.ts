@@ -11,6 +11,9 @@ export const EXPORT_PERMISSIONS: Record<string, Permission[]> = {
   expenses: ["expense.view.project", "expense.view.own"],
   invoices: ["invoice.view"],
   budget: ["budget.client.view", "budget.internal.view"],
+  // S5: jadwal/WBS. Rencana & progres fisik bukan data komersial, jadi
+  // `schedule.view` cukup — tidak ada nilai biaya di dalam ekspor ini.
+  schedule: ["schedule.view"],
 };
 
 export const EXPORT_TYPES = Object.keys(EXPORT_PERMISSIONS);

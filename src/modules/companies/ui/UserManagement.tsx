@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Copy, RefreshCw, UserPlus, Users } from "lucide-react";
+import { Copy, Lock, LockOpen, RefreshCw, UserPlus, Users } from "lucide-react";
 import { api } from "@/lib/client";
 import { ROLES, type Role } from "@/lib/domain";
 import { Badge, Button, EmptyState, Field, Input, SectionTitle, Select, TableSkeleton } from "@/components/ui";
@@ -69,6 +69,17 @@ export default function UserManagement({ onSaved }: { onSaved: (message: string)
     }
   };
 
+  const unlock = async (userId: string) => {
+    setError("");
+    try {
+      await api(`/api/users/${encodeURIComponent(userId)}/action`, { method: "POST", body: JSON.stringify({ action: "UNLOCK" }) });
+      onSaved("Kunci login dibuka; penghitung kegagalan direset ke 0.");
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Gagal membuka kunci login.");
+    }
+  };
+
   return (
     <div>
       <SectionTitle
@@ -117,8 +128,14 @@ export default function UserManagement({ onSaved }: { onSaved: (message: string)
                 <Select aria-label={`Peran ${m.name}`} value={m.companyRole} onChange={(e) => void changeMember(m.userId, { companyRole: e.target.value as Role })}>
                   {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
                 </Select>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <Badge value={m.status} label={m.status === "ACTIVE" ? "Aktif" : "Nonaktif"} />
+                  {m.lockedUntil ? (
+                    <>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-warn-bg px-2 py-1 text-[10.5px] font-semibold text-warn"><Lock size={11} />Terkunci s/d {new Date(m.lockedUntil).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}</span>
+                      <Button variant="secondary" size="sm" onClick={() => void unlock(m.userId)}><LockOpen size={13} />Buka kunci</Button>
+                    </>
+                  ) : null}
                   <Button variant="ghost" size="sm" onClick={() => void changeMember(m.userId, { status: m.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE" })}>
                     {m.status === "ACTIVE" ? "Nonaktifkan" : "Aktifkan"}
                   </Button>
