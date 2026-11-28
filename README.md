@@ -108,6 +108,7 @@ Tiga temuan lama ditutup tanpa menunggu sprint fitur:
 | `npm test` | Vitest (unit + eksekusi seluruh migrasi SQL di PGlite; integrasi RLS opsional) |
 | `npm run db:migrate` | Terapkan migrasi berversi |
 | `npm run db:migrate -- --check` | Daftar migrasi tertunda |
+| `npm run db:migrate:sql` | Cetak skrip migrasi gabungan untuk SQL Editor Neon |
 | `npm run db:admin-sql` | Cetak SQL provisioning admin untuk ditempel ke SQL Editor (tanpa akses DB) |
 | `npm run db:create-admin` | Buat/tautkan akun ADMIN ke email Anda (`--email`, `--name`, `--company`, `--relink-from`) |
 | `npm run db:hash-password` | Buat hash `password_hash` (+ blok SQL siap tempel) untuk table/SQL editor |

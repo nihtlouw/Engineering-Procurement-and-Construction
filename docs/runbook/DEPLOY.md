@@ -255,6 +255,44 @@ Urutan: `npm run db:migrate -- --check` → `npm run db:migrate` → `npm run db
 | 12 | Progres pada baris ringkasan WBS ditolak | UAT: `POST /api/schedule/<id-grup>/progress` → 422 `WBS_SUMMARY_READONLY` |
 | 13 | Build/typecheck/lint/test/audit hijau | `npm run typecheck && npm run lint && npm test && npm audit --omit=dev --audit-level=high` |
 
+## Menjalankan migrasi tanpa terminal
+
+Migrasi **harus** dijalankan sekali pada database Neon sebelum fitur apa pun
+bekerja. Gejala bila belum: `ERROR: relation "companies" does not exist`
+(SQLSTATE 42P01) — tabel belum ada, bukan salah SQL.
+
+> **Penting:** rantai migrasi `0000`–`0011` adalah migrasi **increment** untuk
+> skema 28 tabel yang dulu dibuat `drizzle-kit push`. `0000` membuat
+> `companies`, `memberships`, `invitations`, `auth_events`, lalu **meng-`ALTER`**
+> tabel yang dianggap sudah ada (`users`, `sessions`, 24 tabel bisnis). Jadi pada
+> database yang benar-benar kosong, rantai ini berhenti di
+> `relation "users" does not exist` — itu perilaku yang diketahui, bukan bug baru.
+
+Tiga cara menjalankan, pilih sesuai akses yang Anda punya:
+
+| Akses | Cara | Catatan |
+|---|---|---|
+| Punya repo + GitHub | **Actions → “Migrasi database” → Run workflow** (`check` lalu `apply`) | Butuh secret `DATABASE_URL`. Tidak perlu terminal. |
+| Punya repo + terminal lokal | `DATABASE_URL='...' npm run db:migrate` | paling cepat, mencatat progres di `_migrations` |
+| Hanya dashboard Neon | `npm run db:migrate:sql > migrate.sql` lalu tempel ke SQL Editor | skrip gabungan, **wajib** dijalankan pada DB yang sudah punya skema baseline |
+
+### Menyiapkan Actions (sekali saja)
+
+1. GitHub → repo → **Settings → Secrets and variables → Actions → New repository secret**.
+2. Tambahkan `DATABASE_URL` (connection string Neon, gunakan endpoint **direct**
+   bukan pooler untuk DDL) dan `FILE_SIGNING_SECRET` (bila ingin `verify-rls`).
+3. Buka tab **Actions** → **Migrasi database** → **Run workflow** → `mode: check`
+   untuk melihat daftar tertunda, lalu ulangi dengan `mode: apply`.
+
+### Bila database Neon ternyata kosong
+
+Rantai migrasi tidak dapat membuat 28 tabel pra-S1. Dua pilihan jujur:
+
+1. **Pakai database yang skemanya sudah ada** (mis. Neon branch/DB lama yang
+   dulu dipakai aplikasi) lalu jalankan migrasi di sana; atau
+2. buat **skrip baseline** dari `src/db/schema.ts` (pekerjaan terpisah, belum
+   ada di repo ini). Sampai itu dibuat, jangan menghapus database lama.
+
 ## Membuat akun ADMIN tanpa terminal (SQL Editor Neon)
 
 Perintah `npm run …` adalah perintah **terminal**; menempelkannya ke SQL Editor
