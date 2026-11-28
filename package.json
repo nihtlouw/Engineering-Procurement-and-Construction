@@ -14,7 +14,8 @@
     "db:verify": "tsx scripts/verify-rls.ts",
     "db:reset-password": "tsx scripts/reset-password.ts",
     "db:hash-password": "tsx scripts/hash-password.ts",
-    "db:create-admin": "tsx scripts/create-admin.ts"
+    "db:create-admin": "tsx scripts/create-admin.ts",
+    "db:admin-sql": "tsx scripts/admin-sql.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1170.0",
