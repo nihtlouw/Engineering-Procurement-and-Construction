@@ -352,6 +352,77 @@ urutkan dari yang paling ringan:
 | Pengguna lupa password, ada ADMIN lain yang bisa masuk | **Pengguna & peran → Reset password** pada baris anggota | ADMIN company |
 | Tidak ada satu pun ADMIN yang bisa masuk | `npm run db:reset-password -- --email <email>` | pemegang akses environment |
 
+### Konsep yang sering tertukar: env Vercel ≠ password akun
+
+`SEED_DEMO_PASSWORD` di Vercel **bukan** password admin yang sedang dipakai. Env
+itu hanya dibaca oleh `scripts/seed-demo.ts` (CLI) — tidak ada satu baris pun di
+`src/` yang membacanya. Mengubahnya **tidak mengubah password akun mana pun**;
+akun yang sudah ada di database tetap memakai hash lamanya.
+
+Yang benar: password akun hidup di kolom `users.password_hash`. Untuk menyiapkan
+password banyak akun, ada tiga jalur di bawah — pilih berdasarkan **di mana Anda
+bisa menjalankan perintah**, bukan berdasarkan mana yang paling cepat.
+
+### Menyiapkan password BANYAK akun sekaligus
+
+| Jalur | Di mana dijalankan | Cocok untuk |
+|---|---|---|
+| Undang lewat email | UI **Pengguna & peran → Undang** (butuh `EMAIL_DRIVER`+`RESEND_API_KEY`) | produksi: pengguna memilih password sendiri, admin tidak pernah tahu |
+| `npm run db:set-passwords` | terminal laptop / GitHub Actions | setelah impor data demo: 6 akun (atau semua) dapat password acak berbeda |
+| `npm run db:hash-password --email a,b,c` | terminal laptop | menghasilkan **satu** blok SQL untuk banyak email sekaligus, siap tempel di Neon |
+
+**Jalur yang dianjurkan untuk produksi: undangan.** Password tidak pernah
+dibuatkan untuk orang lain; admin mengirim tautan, pengguna menentukannya sendiri.
+
+#### A. Lewat UI (tanpa terminal, tanpa SQL)
+
+1. Masuk sebagai ADMIN → **Pengguna & peran**.
+2. Isi email + peran → **Undang**. Undangan tampil **sekali** di layar (dan
+   terkirim lewat email bila `EMAIL_DRIVER` dikonfigurasi).
+3. Kirim tautan `/accept-invite?token=…` ke orang tersebut lewat kanal pribadi.
+4. Ia membuka tautan, mengisi nama + password sendiri, lalu masuk.
+   Password tidak pernah melewati admin — ini alasan jalur ini dianjurkan.
+
+Bila undangan kedaluwarsa: undang ulang (undangan lama otomatis dicabut).
+
+#### B. Terminal: satu password acak berbeda per akun
+
+```bash
+# lihat dulu siapa yang akan kena (tidak menulis apa pun)
+npm run db:set-passwords -- --only-demo --dry-run
+
+# 6 akun demo: masing-masing dapat password acak 20 karakter, dicetak sekali
+npm run db:set-passwords -- --only-demo
+
+# akun tertentu
+npm run db:set-passwords -- --email a@x.id,b@x.id
+
+# semua akun aktif (hati-hati: semua sesi ikut dicabut)
+npm run db:set-passwords --dry-run
+npm run db:set-passwords
+```
+
+Yang dilakukan skrip ini per akun: tulis hash scrypt baru, cabut semua sesi,
+buka kunci login (bila kolomnya ada), tulis audit `PASSWORD_RESET_CLI`.
+Password **hanya** dicetak sekali ke terminal — tidak disimpan di mana pun.
+
+`--all-password '<satu password>'` tersedia, tetapi sengaja diberi peringatan:
+satu password untuk banyak akun adalah persis masalah lama (6 akun demo berbagi
+satu hash).
+
+#### C. Hanya Neon (SQL Editor), banyak email sekaligus
+
+Hash tidak bisa dibuat oleh Postgres (aplikasi memakai scrypt Node). Jadi hash
+dibuat di terminal, lalu hasilnya ditempel:
+
+```bash
+npm run db:hash-password -- --password 'SatuPassword123' --email 'admin@ardaya.id,estimator@ardaya.id,pm@ardaya.id'
+```
+
+Blok SQL yang tercetak sudah **tahan skema lama**: reset `failed_login_count` /
+`locked_until` dibungkus pemeriksaan `information_schema`, sehingga perintah yang
+sama jalan sebelum maupun sesudah migrasi `0010`.
+
 ### Reset lewat UI (ADMIN)
 
 1. Buka **Pengguna & peran**, cari anggota, klik **Reset password**.

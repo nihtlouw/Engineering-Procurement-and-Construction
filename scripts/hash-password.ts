@@ -34,14 +34,72 @@ export function verifyPasswordHash(password: string, stored: string): boolean {
   return expected.length === candidate.length && timingSafeEqual(candidate, expected);
 }
 
+/**
+ * Membangun SQL reset password yang AMAN untuk kedua versi skema.
+ *
+ * Kenapa tidak langsung `failed_login_count = 0`: kolom itu baru ada setelah
+ * migrasi 0010. Bila disebut langsung, seluruh `update` GAGAL di database yang
+ * belum dimigrasi — padahal justru database itulah yang butuh reset darurat.
+ * Blok `do` di bawah memeriksa `information_schema` lebih dulu, sehingga
+ * pernyataan reset kunci hanya dijalankan bila kolomnya memang ada.
+ */
+export function buildResetSql(emails: string[], hash: string): string {
+  const list = emails
+    // Satu argumen boleh berisi beberapa alamat dipisah koma.
+    .flatMap((email) => email.split(","))
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean)
+    .map((email) => `'${email.replace(/'/g, "''")}'`)
+    .join(", ");
+  const hashLiteral = `'${hash.replace(/'/g, "''")}'`;
+  return [
+    "begin;",
+    "",
+    `update users set password_hash = ${hashLiteral}`,
+    ` where email in (${list});`,
+    "",
+    "-- Reset kunci login HANYA bila kolomnya ada (kolom ini datang dari migrasi 0010).",
+    "do $$",
+    "begin",
+    "  if exists (select 1 from information_schema.columns",
+    "              where table_schema = 'public' and table_name = 'users'",
+    "                and column_name = 'locked_until') then",
+    "    update users set failed_login_count = 0, locked_until = null",
+    `     where email in (${list});`,
+    "  end if;",
+    "end $$;",
+    "",
+    "-- Sesi lama wajib dicabut: password berganti berarti sesi lama tidak sah lagi.",
+    `delete from sessions where user_id in (select id from users where email in (${list}));`,
+    "",
+    "commit;",
+    "",
+  ].join("\n");
+}
+
+/**
+ * Apakah tabel `users` sudah punya kolom dari migrasi 0010?
+ *
+ * Skrip CLI yang menulis `failed_login_count`/`locked_until` akan GAGAL total di
+ * database yang belum dimigrasi — persis kasus yang paling butuh pemulihan.
+ * Karena itu keberadaan kolom diperiksa dulu, bukan diasumsikan.
+ */
+export async function hasLockColumns(query: (sql: string) => Promise<unknown>): Promise<boolean> {
+  const result = (await query(
+    "select column_name from information_schema.columns where table_schema = 'public' and table_name = 'users' and column_name = 'locked_until'",
+  )) as { rows?: unknown[] };
+  return Array.isArray(result?.rows) && result.rows.length > 0;
+}
+
 function parseArgs(argv: string[]) {
   const args: { password?: string; email?: string; sql: boolean } = { sql: false };
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
     if (token === "--sql") args.sql = true;
-    else if (token === "--email") args.email = argv[index + 1];
+    else if (token === "--email" || token === "--emails") args.email = argv[index + 1];
     else if (token === "--password") args.password = argv[index + 1];
     else if (token.startsWith("--email=")) args.email = token.slice("--email=".length);
+    else if (token.startsWith("--emails=")) args.email = token.slice("--emails=".length);
     else if (token.startsWith("--password=")) args.password = token.slice("--password=".length);
   }
   return args;
@@ -79,13 +137,8 @@ function main() {
   console.log(`\nPanjang: ${hash.length} karakter (salt 32 + titik dua + hash 128).`);
 
   if (email) {
-    const safeEmail = email.toLowerCase().trim().replace(/'/g, "''");
     console.log("\nPerintah SQL (tempel di SQL editor Neon, jalankan seluruhnya dalam satu transaksi):\n");
-    console.log("begin;");
-    console.log(`update users set password_hash = '${hash}', failed_login_count = 0, locked_until = null`);
-    console.log(` where email = '${safeEmail}';`);
-    console.log("delete from sessions where user_id in (select id from users where email = '" + safeEmail + "');");
-    console.log("commit;\n");
+    console.log(buildResetSql([email], hash));
     console.log("Dua pernyataan terakhir ikut WAJIB: tanpa itu sesi lama tetap hidup");
     console.log("dan akun yang sedang terkunci tetap menolak login 15 menit.");
   } else if (sql) {

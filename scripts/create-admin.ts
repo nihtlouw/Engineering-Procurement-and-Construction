@@ -23,6 +23,7 @@ import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { activityLogs, companies, memberships, sessions, users } from "../src/db/schema";
+import { hasLockColumns } from "./hash-password";
 
 config({ path: ".env.local", quiet: true });
 
@@ -138,8 +139,11 @@ async function main() {
 
     // 4. Password (opsional) + reset penghitung/kunci + cabut sesi lama.
     if (password) {
+      // Kolom kunci login hanya ada setelah migrasi 0010.
+      const lockColumns = await hasLockColumns((sqlText) => pool.query(sqlText));
       await db.update(users).set({
-        passwordHash: hashPassword(password), failedLoginCount: 0, lockedUntil: null,
+        passwordHash: hashPassword(password),
+        ...(lockColumns ? { failedLoginCount: 0, lockedUntil: null } : {}),
         isActive: true,
       }).where(eq(users.id, account.id));
       await db.delete(sessions).where(eq(sessions.userId, account.id));
