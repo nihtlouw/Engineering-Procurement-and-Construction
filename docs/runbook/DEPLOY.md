@@ -255,6 +255,25 @@ Urutan: `npm run db:migrate -- --check` → `npm run db:migrate` → `npm run db
 | 12 | Progres pada baris ringkasan WBS ditolak | UAT: `POST /api/schedule/<id-grup>/progress` → 422 `WBS_SUMMARY_READONLY` |
 | 13 | Build/typecheck/lint/test/audit hijau | `npm run typecheck && npm run lint && npm test && npm audit --omit=dev --audit-level=high` |
 
+## Kondisi database terpasang (hasil audit skema nyata)
+
+Dari ekspor tabel `users` pada database Neon yang dipakai aplikasi:
+
+| Fakta | Konsekuensi |
+|---|---|
+| Kolom `users` berhenti di `created_at` — **tanpa** `failed_login_count` / `locked_until` | Migrasi `0010` **belum** diterapkan. Selama itu, kode terbaru (`select().from(users)`) akan gagal `column "failed_login_count" does not exist`. |
+| 6 akun demo berbagi **satu hash identik** | Satu kebocoran membuka keenam akun. Perlu diganti. |
+| `users.id` bertipe `text` tanpa default; `activity_logs.id` juga tanpa default | SQL manual wajib menyebut `id` eksplisit. |
+
+**Urutan yang benar:** migrasi dulu (`npm run db:migrate` / workflow Actions),
+baru provisioning admin. Setelah `0010` masuk, reset password via email (0011)
+juga bisa dipakai.
+
+Berkas siap tempel untuk database ini:
+[`docs/runbook/sql/provision-admin-aiengineer2027life.sql`](sql/provision-admin-aiengineer2027life.sql)
+— hanya memakai kolom yang benar-benar ada, menempelkan admin ke company yang
+sudah ada (bukan membuat tenant baru), dan mengganti hash 6 akun demo.
+
 ## Menjalankan migrasi tanpa terminal
 
 Migrasi **harus** dijalankan sekali pada database Neon sebelum fitur apa pun

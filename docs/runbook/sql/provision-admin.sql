@@ -13,17 +13,28 @@
 --      mengetik password biasa — kolom ini berisi `salt:hash` scrypt 161 char.
 --   3. Jalankan seluruh berkas sekaligus (satu transaksi).
 --
--- Aman dijalankan berulang: semua insert memakai ON CONFLICT.
+-- Aman dijalankan berulang: semua insert memakai ON CONFLICT dan UPDATE bersifat
+-- idempoten.
+--
+-- Dua varian skema didukung:
+-- - **tanpa kolom 0010** (`failed_login_count`, `locked_until` belum ada) →
+--   pakai berkas ini apa adanya;
+-- - **dengan kolom 0010** → tambahkan `, failed_login_count = 0, locked_until = null`
+--   pada blok UPDATE password (opsional, hanya merapikan status kunci).
 -- ============================================================================
 
 begin;
 
--- 1) Company. Bila slug sudah ada, tidak ada yang dibuat.
+-- 1) Company. HANYA dibuat bila belum ada satu pun — membuat company baru saat
+--    data sudah ada menghasilkan tenant kosong (proyek lama tidak terlihat).
 insert into companies (slug, name, legal_name, email)
-values ('__SLUG__', '__COMPANY__', '__COMPANY__', '__EMAIL__')
-on conflict (slug) do nothing;
+select '__SLUG__', '__COMPANY__', '__COMPANY__', '__EMAIL__'
+ where not exists (select 1 from companies);
 
 -- 2) Akun admin. `users.id` bertipe text tanpa default → diisi eksplisit.
+--    Skema yang dipakai HANYA kolom yang ada di tabel `users` hasil instalasi
+--    awal; kolom `0010` sengaja tidak disertakan agar skrip ini tidak gagal
+--    sebelum migrasi 0010 diterapkan.
 insert into users (id, name, email, role, title, password_hash)
 values (
   'usr-admin-owner',
@@ -37,29 +48,23 @@ on conflict (email) do update
   set password_hash = excluded.password_hash,
       is_active = true;
 
--- 3) Keanggotaan ADMIN (idempoten lewat unique (company_id, user_id)).
+-- 3) Keanggotaan ADMIN ditempelkan ke company YANG SUDAH ADA (yang tertua =
+--    tenant sebenarnya tempat proyek & data tersimpan), bukan ke company baru.
 insert into memberships (company_id, user_id, company_role, status)
 select c.id, u.id, 'ADMIN', 'ACTIVE'
-  from companies c, users u
- where c.slug = '__SLUG__'
-   and u.email = '__EMAIL__'
+  from (select id from companies order by created_at, id limit 1) c, users u
+ where u.email = '__EMAIL__'
 on conflict (company_id, user_id) do update
   set company_role = 'ADMIN', status = 'ACTIVE', updated_at = now();
 
--- 4) Audit. `activity_logs.company_id` NOT NULL DEFAULT app_current_company_id(),
---    jadi GUC diset lebih dulu pada sesi ini (bukan RLS — tabel ini FORCE RLS
---    sehingga SET LOCAL wajib berada di dalam transaksi yang sama).
-select set_config('app.current_company_id', (select id::text from companies where slug = '__SLUG__'), true);
-
-insert into activity_logs (object_type, object_id, project_id, action, changes, reason)
-values (
-  'USER',
-  (select id from users where email = '__EMAIL__'),
-  null,
-  'ADMIN_ACCOUNT_PROVISIONED',
-  jsonb_build_array(jsonb_build_object('field', 'email', 'old', null, 'new', '__EMAIL__')),
-  'Provisioning admin lewat SQL Editor'
-);
+-- 4) Ganti hash untuk akun demo lama (opsional, hapus blok ini bila tidak perlu).
+--    Semua akun demo berbagi SATU hash — artinya satu kebocoran membuka semuanya.
+--    Blok ini memberi mereka satu password acak yang diketahui tim, sehingga
+--    akun lama tidak lagi memakai password bersama yang tidak diketahui siapa pun.
+update users
+   set password_hash = '__DEMO_HASH__'
+ where email in ('admin@ardaya.id','estimator@ardaya.id','field@ardaya.id',
+                 'finance@ardaya.id','pm@ardaya.id','procurement@ardaya.id');
 
 commit;
 
