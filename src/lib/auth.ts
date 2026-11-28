@@ -1,4 +1,4 @@
-import { createHash, createHmac, randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { cookies } from "next/headers";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { ZodError } from "zod";
@@ -22,18 +22,12 @@ export const SESSION_IDLE_MINUTES = 30;
 /* Password                                                                   */
 /* -------------------------------------------------------------------------- */
 
-export function hashPassword(password: string) {
-  const salt = randomBytes(16).toString("hex");
-  return `${salt}:${scryptSync(password, salt, 64).toString("hex")}`;
-}
-
-export function verifyPassword(password: string, stored: string) {
-  const [salt, key] = stored.split(":");
-  if (!salt || !key) return false;
-  const candidate = scryptSync(password, salt, 64);
-  const expected = Buffer.from(key, "hex");
-  return expected.length === candidate.length && timingSafeEqual(candidate, expected);
-}
+/* Implementasi pindah ke `@/lib/passwords` (tanpa `next/headers`, sehingga bisa
+   dipakai CLI & tes). Dipertahankan sebagai re-export agar pemanggil lama tidak
+   putus. `hashPassword` sekarang ASINKRON: `scryptSync` memblokir event loop
+   ~41–88 ms per percobaan login (terukur), yang bisa dipakai penyerang untuk
+   memperlambat seluruh instance. Lihat komentar di modul tersebut (audit #7). */
+export { hashPasswordAsync as hashPassword, verifyPasswordAsync as verifyPassword, needsRehash, SCRYPT_PARAMS } from "@/lib/passwords";
 
 export const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
 
@@ -71,7 +65,10 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
     .where(and(
       eq(sessions.id, sessionId),
       gt(sessions.expiresAt, new Date()),
-      gt(sessions.lastSeenAt, sql`now() - interval '30 minutes'`),
+      // Idle timeout memakai konstanta yang sama dengan yang didokumentasikan;
+      // sebelumnya angka 30 ditulis dua kali (konstanta + literal) sehingga
+      // mengubah konstanta tidak mengubah perilaku.
+      gt(sessions.lastSeenAt, sql`now() - make_interval(mins => ${SESSION_IDLE_MINUTES})`),
       eq(users.isActive, true),
       eq(companies.isActive, true),
       isNull(companies.deletedAt),

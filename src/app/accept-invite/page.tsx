@@ -41,7 +41,7 @@ function AcceptInviteForm() {
         ) : (
           <form className="mt-5 space-y-3.5" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
             <Field label="Nama lengkap"><Input value={name} onChange={(e) => setName(e.target.value)} required minLength={2} autoComplete="name" /></Field>
-            <Field label="Kata sandi" hint="Minimal 8 karakter. Jika email sudah terdaftar, gunakan password lama Anda."><Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} autoComplete="new-password" /></Field>
+            <Field label="Kata sandi" hint="Minimal 12 karakter, memuat huruf besar, huruf kecil, dan angka. Jika email sudah terdaftar, gunakan password lama Anda."><Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={12} autoComplete="new-password" /></Field>
             {error ? <p role="alert" className="rounded-[var(--radius-control)] border border-danger-line bg-danger-bg px-3 py-2 text-[12px] text-danger">{error}</p> : null}
             <Button type="submit" size="lg" loading={loading} className="w-full" disabled={!name.trim() || !password}>Masuk ke company</Button>
           </form>

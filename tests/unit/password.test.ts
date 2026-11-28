@@ -52,8 +52,10 @@ describe("ganti password sendiri", () => {
 describe("hash password untuk table editor", () => {
   it("menghasilkan format salt:hash yang dapat diverifikasi", () => {
     const hash = hashPasswordForStorage("Ard4yaPemulihan26");
-    expect(hash).toMatch(/^[0-9a-f]{32}:[0-9a-f]{128}$/);
-    expect(hash).toHaveLength(161);
+    // Format baru berversi (lihat src/lib/passwords.ts): parameter scrypt ikut
+    // tersimpan sehingga bisa dinaikkan di masa depan tanpa mengunci akun lama.
+    expect(hash).toMatch(/^scrypt\$N=32768,r=8,p=1\$[0-9a-f]{32}\$[0-9a-f]{128}$/);
+    expect(hash).toHaveLength(184);
     expect(verifyPasswordHash("Ard4yaPemulihan26", hash)).toBe(true);
   });
 

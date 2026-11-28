@@ -21,11 +21,14 @@ const PUBLIC_PATHS = [
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  if (PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
-    return NextResponse.next();
-  }
+  const isPublic = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 
-  // Pertahanan CSRF dasar untuk seluruh mutasi.
+  /* Pertahanan CSRF untuk SELURUH mutasi — termasuk route publik.
+     Sebelumnya pemeriksaan ini dilewati untuk route publik (login, reset,
+     accept-invite). Akibatnya `POST /api/auth/login` lintas situs tetap diterima:
+     penyerang dapat memaksa korban masuk ke AKUN PENYERANG (login CSRF) sehingga
+     korban mengunggah data ke tenant yang salah tanpa sadar. Pemeriksaan origin
+     tidak membutuhkan sesi, jadi tidak ada alasan melewatinya. */
   if (!["GET", "HEAD", "OPTIONS"].includes(request.method)) {
     const site = request.headers.get("sec-fetch-site");
     if (site === "cross-site") {
@@ -43,6 +46,8 @@ export function proxy(request: NextRequest) {
       }
     }
   }
+
+  if (isPublic) return NextResponse.next();
 
   if (!request.cookies.has("epc_session")) {
     return NextResponse.json(

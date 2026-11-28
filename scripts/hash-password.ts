@@ -5,7 +5,8 @@
  *   npm run db:hash-password -- --password 'Ard4yaPemulihan26' --sql
  *
  * Kenapa alat ini ada: password aplikasi ini disimpan sebagai scrypt
- * `salt:hash` (panjang total 161 karakter), BUKAN teks dan BUKAN md5/bcrypt.
+ * scrypt berversi (`scrypt$N=...,r=...,p=...$salt$hash`, 184 karakter) atau
+ * format lama `salt:hash` (161 karakter) — BUKAN teks dan BUKAN md5/bcrypt.
  * Mengetik password biasa ke table editor Neon akan membuat akun mustahil
  * login — hash-nya tidak akan pernah cocok. Alat ini mengeluarkan string yang
  * tepat, dan dengan `--sql` sekaligus perintah UPDATE yang bisa ditempel ke
@@ -16,22 +17,21 @@
  * boleh meng-import modul yang memakai `next/headers`. Tests/unit/password-hash
  * memverifikasi keduanya menghasilkan format yang sama.
  */
-import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { hashPasswordSync, verifyPasswordSync } from "../src/lib/passwords";
 
-const KEY_LENGTH = 64;
-
+/**
+ * Alias lama dipertahankan karena dipakai tes dan `scripts/admin-sql.ts`.
+ * Implementasinya TIDAK diduplikasi lagi di sini: satu sumber kebenaran di
+ * `src/lib/passwords.ts`, sehingga hash dari CLI selalu identik dengan yang
+ * dihasilkan aplikasi (termasuk parameter scrypt & format berversi).
+ */
 export function hashPasswordForStorage(password: string): string {
-  const salt = randomBytes(16).toString("hex");
-  return `${salt}:${scryptSync(password, salt, KEY_LENGTH).toString("hex")}`;
+  return hashPasswordSync(password);
 }
 
-/** Verifikasi terbalik untuk memastikan hash yang dicetak benar-benar cocok. */
+/** Verifikasi SINKRON khusus CLI/tes. Jalur request memakai versi async. */
 export function verifyPasswordHash(password: string, stored: string): boolean {
-  const [salt, key] = stored.split(":");
-  if (!salt || !key) return false;
-  const candidate = scryptSync(password, salt, KEY_LENGTH);
-  const expected = Buffer.from(key, "hex");
-  return expected.length === candidate.length && timingSafeEqual(candidate, expected);
+  return verifyPasswordSync(password, stored);
 }
 
 /**
@@ -40,8 +40,7 @@ export function verifyPasswordHash(password: string, stored: string): boolean {
  * Kenapa tidak langsung `failed_login_count = 0`: kolom itu baru ada setelah
  * migrasi 0010. Bila disebut langsung, seluruh `update` GAGAL di database yang
  * belum dimigrasi — padahal justru database itulah yang butuh reset darurat.
- * Blok `do` di bawah memeriksa `information_schema` lebih dulu, sehingga
- * pernyataan reset kunci hanya dijalankan bila kolomnya memang ada.
+ * Blok `do` di bawah memeriksa `information_schema` lebih dulu.
  */
 export function buildResetSql(emails: string[], hash: string): string {
   const list = emails
@@ -134,7 +133,7 @@ function main() {
 
   console.log("Hash siap ditempel ke kolom users.password_hash:\n");
   console.log(hash);
-  console.log(`\nPanjang: ${hash.length} karakter (salt 32 + titik dua + hash 128).`);
+  console.log(`\nPanjang: ${hash.length} karakter (format berversi: tag parameter + salt 32 + hash 128).`);
 
   if (email) {
     console.log("\nPerintah SQL (tempel di SQL editor Neon, jalankan seluruhnya dalam satu transaksi):\n");

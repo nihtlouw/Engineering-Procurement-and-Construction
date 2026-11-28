@@ -10,7 +10,8 @@
 --      (atau jalankan: npm run db:admin-sql -- --email ... --name "..." >
 --       admin.sql, lalu tempel isinya).
 --   2. Ganti __HASH__ dengan hash dari `npm run db:hash-password`. JANGAN
---      mengetik password biasa — kolom ini berisi `salt:hash` scrypt 161 char.
+--      mengetik password biasa — kolom ini berisi hash scrypt (format lama
+--      `salt:hash` 161 char, atau format baru `scrypt$N=...$salt$hash` 184 char).
 --   3. Jalankan seluruh berkas sekaligus (satu transaksi).
 --
 -- Aman dijalankan berulang: semua insert memakai ON CONFLICT dan UPDATE bersifat
@@ -68,7 +69,7 @@ update users
 
 commit;
 
--- 5) Verifikasi: satu baris, role ADMIN, panjang_hash = 161.
+-- 5) Verifikasi: satu baris, role ADMIN, panjang_hash 161 (format lama) atau 184 (format baru).
 select u.email, u.role, length(u.password_hash) as panjang_hash, m.company_role, m.status
   from users u
   join memberships m on m.user_id = u.id

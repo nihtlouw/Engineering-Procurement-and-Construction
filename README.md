@@ -137,6 +137,7 @@ Tiga temuan lama ditutup tanpa menunggu sprint fitur:
 
 **Jangan menyimpan secret di kode atau di repo.** `.env.*` sudah diabaikan Git kecuali `.env.example`.
 Checklist deploy lengkap: [`docs/runbook/DEPLOY.md`](docs/runbook/DEPLOY.md).
+Status & batasan autentikasi (dengan angka terukur): [`docs/runbook/AUTH.md`](docs/runbook/AUTH.md).
 
 ## Struktur (S1)
 
