@@ -17,7 +17,8 @@
     "db:create-admin": "tsx scripts/create-admin.ts",
     "db:admin-sql": "tsx scripts/admin-sql.ts",
     "db:migrate:sql": "tsx scripts/migrate-sql.ts",
-    "db:set-passwords": "tsx scripts/set-passwords.ts"
+    "db:set-passwords": "tsx scripts/set-passwords.ts",
+    "db:baseline": "tsx scripts/build-baseline.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1170.0",

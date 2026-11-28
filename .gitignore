@@ -14,3 +14,4 @@ dev.err
 .vercel/
 .pglite-data/
 .local-storage/
+drizzle/meta/

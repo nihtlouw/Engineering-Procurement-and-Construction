@@ -24,8 +24,10 @@ npm run dev
 SEED_DEMO_PASSWORD='password-anda' npm run db:seed:demo
 
 # Siapkan password akun (acak berbeda per akun, dicetak sekali)
-npm run db:set-passwords -- --only-demo --dry-run
 npm run db:set-passwords -- --only-demo
+
+# Bangun ulang baseline skema (idempoten) dari src/db/schema.ts
+npm run db:baseline   # regenerasi baseline dari schema.ts
 ```
 
 Seed **tidak pernah** dijalankan dari HTTP request dan diblokir di production kecuali `ALLOW_DEMO_SEED=yes`. Tidak ada password bawaan di kode dan tidak ada kredensial demo yang ditampilkan di halaman login.
