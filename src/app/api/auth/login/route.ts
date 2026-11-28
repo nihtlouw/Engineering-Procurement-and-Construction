@@ -2,7 +2,8 @@ import { and, asc, count, eq, gte } from "drizzle-orm";
 import { z } from "zod";
 import { baseDb } from "@/db";
 import { authEvents, companies, memberships, users } from "@/db/schema";
-import { createSession, errorResponse, safeUser, verifyPassword } from "@/lib/auth";
+import { createSession, errorResponse, needsRehash, safeUser, verifyPassword } from "@/lib/auth";
+import { hashPasswordAsync } from "@/lib/passwords";
 import { ROLE_PERMISSIONS, type Role } from "@/lib/domain";
 import { publicRoute } from "@/shared/auth/route";
 
@@ -15,6 +16,24 @@ const MAX_FAILURES_PER_MINUTE = 8;
 const WINDOW_MS = 60_000;
 /* 0010: ambang kunci akun. 10 kegagalan → 15 menit, 20 → 60 menit.
    Penghitung bertahan di DB sehingga tidak hilang saat instance Vercel didaur. */
+/**
+ * Hash tiruan untuk email yang TIDAK terdaftar.
+ *
+ * Tanpa ini, jalur "email tidak ada" kembali dalam ~0 ms sementara jalur
+ * "email ada" butuh ~88 ms (scrypt). Selisih itu adalah oracle enumerasi akun:
+ * penyerang dapat memetakan email mana yang terdaftar tanpa satu pun login
+ * berhasil — membatalkan seluruh usaha "respons seragam" di sisi pesan.
+ * Angka 88 ms berasal dari pengukuran parameter scrypt aktif.
+ *
+ * Dibuat lazy (sekali per proses) agar import modul tetap murah.
+ */
+const DUMMY_PASSWORD = "dummy-password-for-timing-parity";
+let dummyHashPromise: Promise<string> | null = null;
+function dummyHash(): Promise<string> {
+  if (!dummyHashPromise) dummyHashPromise = hashPasswordAsync(DUMMY_PASSWORD);
+  return dummyHashPromise;
+}
+
 const LOCK_THRESHOLDS = [
   { failures: 20, minutes: 60 },
   { failures: 10, minutes: 15 },
@@ -68,7 +87,10 @@ async function POSTHandler(request: Request) {
       }, { status: 423 });
     }
 
-    if (!user || !user.isActive || !verifyPassword(body.password, user.passwordHash)) {
+    // Kerja verifikasi SELALU dilakukan walau akun tidak ada / nonaktif, supaya
+    // waktu respons tidak membocorkan keberadaan akun (lihat DUMMY_PASSWORD).
+    const passwordOk = await verifyPassword(body.password, user?.passwordHash ?? (await dummyHash()));
+    if (!user || !user.isActive || !passwordOk) {
       // Hitung kegagalan per akun; hanya untuk email yang benar-benar terdaftar
       // supaya pesan error tetap seragam (tidak membocorkan keberadaan akun).
       if (user) {
@@ -86,9 +108,22 @@ async function POSTHandler(request: Request) {
       return Response.json({ code: "INVALID_CREDENTIALS", message: "Email atau password tidak sesuai." }, { status: 401 });
     }
 
-    // Login berhasil: bersihkan penghitung + kunci.
-    if (user.failedLoginCount || user.lockedUntil) {
-      await baseDb.update(users).set({ failedLoginCount: 0, lockedUntil: null }).where(eq(users.id, user.id));
+    /* Login berhasil: bersihkan penghitung + kunci, dan naikkan parameter hash
+       bila masih legacy. Ini satu-satunya momen password tersedia dalam bentuk
+       terbaca, jadi satu-satunya kesempatan rehash transparan — tanpa itu akun
+       lama memakai scrypt N=16384 selamanya (hash hanya ditulis saat ganti
+       password). Kegagalan rehash TIDAK boleh menggagalkan login. */
+    const rehash = needsRehash(user.passwordHash);
+    if (user.failedLoginCount || user.lockedUntil || rehash) {
+      try {
+        await baseDb.update(users).set({
+          failedLoginCount: 0,
+          lockedUntil: null,
+          ...(rehash ? { passwordHash: await hashPasswordAsync(body.password) } : {}),
+        }).where(eq(users.id, user.id));
+      } catch (error) {
+        console.error("[auth] rehash/gagal bersihkan penghitung:", error instanceof Error ? error.message : "unknown");
+      }
     }
 
     // Role & company diambil dari keanggotaan AKTIF, bukan dari users.role.

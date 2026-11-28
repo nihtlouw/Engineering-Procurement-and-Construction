@@ -449,9 +449,9 @@ perintah `npm`, itu untuk terminal):
 ```sql
 begin;
 
--- Ganti hash di bawah dengan hash 161 karakter milik Anda.
+-- Ganti hash di bawah dengan hash dari `npm run db:hash-password` milik Anda.
 update users
-   set password_hash = '<HASH_161_KARAKTER>',
+   set password_hash = '<HASH_DARI_DB_HASH_PASSWORD>',
        failed_login_count = 0,   -- hapus dua baris ini bila migrasi 0010 belum dijalankan
        locked_until = null
  where email = 'admin@ardaya.id';
@@ -462,7 +462,8 @@ delete from sessions
 commit;
 ```
 
-Periksa hasilnya (harus `161`):
+Periksa hasilnya (`161` = format lama `salt:hash`, `184` = format baru berversi;
+keduanya sah):
 
 ```sql
 select email, length(password_hash) as panjang, failed_login_count, locked_until
@@ -474,7 +475,7 @@ belum diterapkan — jalankan dulu `npm run db:migrate`, atau pakai varian minim
 
 ```sql
 begin;
-update users set password_hash = '<HASH_161_KARAKTER>' where email = 'admin@ardaya.id';
+update users set password_hash = '<HASH_DARI_DB_HASH_PASSWORD>' where email = 'admin@ardaya.id';
 delete from sessions where user_id = (select id from users where email = 'admin@ardaya.id');
 commit;
 ```

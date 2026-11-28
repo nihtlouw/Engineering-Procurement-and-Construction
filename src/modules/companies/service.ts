@@ -125,7 +125,7 @@ export async function acceptInvitation(input: AcceptInviteInput): Promise<{ user
     const [existing] = await tx.select().from(users).where(eq(users.email, invite.email)).limit(1);
     let userId: string;
     if (existing) {
-      if (!verifyPassword(input.password, existing.passwordHash)) {
+      if (!(await verifyPassword(input.password, existing.passwordHash))) {
         throw new ApiError("INVALID_CREDENTIALS", "Email sudah terdaftar. Gunakan password akun Anda yang lama.", 401);
       }
       userId = existing.id;
@@ -133,7 +133,7 @@ export async function acceptInvitation(input: AcceptInviteInput): Promise<{ user
       userId = `usr-${randomBytes(12).toString("hex")}`;
       await tx.insert(users).values({
         id: userId, email: invite.email, name: input.name.trim(),
-        passwordHash: hashPassword(input.password),
+        passwordHash: await hashPassword(input.password),
         role: invite.companyRole, title: roleTitle(invite.companyRole as Role),
       });
     }
@@ -245,7 +245,7 @@ export async function resetMemberPassword(
 
   const active = await baseDb.select({ id: sessions.id }).from(sessions).where(eq(sessions.userId, targetUserId));
   await baseDb.update(users).set({
-    passwordHash: hashPassword(newPassword),
+    passwordHash: await hashPassword(newPassword),
     // Reset password sekaligus membuka kunci: kalau tidak, pengguna tetap
     // tertahan 15 menit setelah admin menyelesaikan masalahnya.
     failedLoginCount: 0,
@@ -271,11 +271,11 @@ export async function changeOwnPassword(
 ): Promise<{ sessionsRevoked: number }> {
   const [account] = await baseDb.select({ passwordHash: users.passwordHash }).from(users).where(eq(users.id, userId)).limit(1);
   if (!account) throw new ApiError("NOT_FOUND", "Akun tidak ditemukan.", 404);
-  if (!verifyPassword(currentPassword, account.passwordHash)) {
+  if (!(await verifyPassword(currentPassword, account.passwordHash))) {
     throw new ApiError("INVALID_CREDENTIALS", "Password saat ini tidak sesuai.", 401);
   }
   const active = await baseDb.select({ id: sessions.id }).from(sessions).where(eq(sessions.userId, userId));
-  await baseDb.update(users).set({ passwordHash: hashPassword(newPassword) }).where(eq(users.id, userId));
+  await baseDb.update(users).set({ passwordHash: await hashPassword(newPassword) }).where(eq(users.id, userId));
   // Sesi lain dicabut, sesi sekarang dipertahankan agar pengguna tidak terlempar.
   await revokeSessions(userId, currentSessionId);
   await revokeActiveResetTokens(userId);

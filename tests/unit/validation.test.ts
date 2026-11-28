@@ -13,9 +13,13 @@ describe("validasi undangan", () => {
   });
 
   it("menolak token pendek dan password lemah", () => {
-    expect(acceptInviteSchema.safeParse({ token: "pendek", name: "Budi", password: "rahasia123" }).success).toBe(false);
+    expect(acceptInviteSchema.safeParse({ token: "pendek", name: "Budi", password: "ArdayaKuat2026" }).success).toBe(false);
     expect(acceptInviteSchema.safeParse({ token: "x".repeat(64), name: "Budi", password: "123" }).success).toBe(false);
-    expect(acceptInviteSchema.safeParse({ token: "x".repeat(64), name: "Budi", password: "rahasia123" }).success).toBe(true);
+    // Perubahan: undangan kini memakai aturan password yang SAMA dengan reset &
+    // ganti password (12 karakter + campuran). Sebelumnya 8 karakter tanpa
+    // campuran, sehingga pengguna baru bisa masuk dengan "rahasia123".
+    expect(acceptInviteSchema.safeParse({ token: "x".repeat(64), name: "Budi", password: "rahasia123" }).success).toBe(false);
+    expect(acceptInviteSchema.safeParse({ token: "x".repeat(64), name: "Budi", password: "ArdayaKuat2026" }).success).toBe(true);
   });
 
   it("menerima CLIENT_VIEWER sebagai role undangan", () => {

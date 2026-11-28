@@ -149,7 +149,7 @@ export async function confirmPasswordReset(token: string, newPassword: string, i
     if (!account?.isActive) throw new ApiError("ACCOUNT_INACTIVE", "Akun tidak aktif. Hubungi admin perusahaan.", 403);
 
     await tx.update(users).set({
-      passwordHash: hashPassword(newPassword),
+      passwordHash: await hashPassword(newPassword),
       failedLoginCount: 0,
       lockedUntil: null,
     }).where(eq(users.id, row.userId));

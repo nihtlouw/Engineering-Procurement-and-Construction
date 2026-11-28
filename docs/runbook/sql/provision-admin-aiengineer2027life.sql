@@ -42,7 +42,7 @@ update users
 
 commit;
 
--- Verifikasi: satu baris, role ADMIN, panjang_hash = 161.
+-- Verifikasi: satu baris, role ADMIN, panjang_hash 161 (format lama) atau 184 (format baru).
 select u.email, u.role, length(u.password_hash) as panjang_hash, m.company_role, m.status
   from users u
   join memberships m on m.user_id = u.id
