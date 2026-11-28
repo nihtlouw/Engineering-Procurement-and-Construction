@@ -255,6 +255,34 @@ Urutan: `npm run db:migrate -- --check` → `npm run db:migrate` → `npm run db
 | 12 | Progres pada baris ringkasan WBS ditolak | UAT: `POST /api/schedule/<id-grup>/progress` → 422 `WBS_SUMMARY_READONLY` |
 | 13 | Build/typecheck/lint/test/audit hijau | `npm run typecheck && npm run lint && npm test && npm audit --omit=dev --audit-level=high` |
 
+## Membuat akun ADMIN tanpa terminal (SQL Editor Neon)
+
+Perintah `npm run …` adalah perintah **terminal**; menempelkannya ke SQL Editor
+Neon menghasilkan `syntax error at or near "npm"` — dan komentar `#` menghasilkan
+`syntax error at or near "#"` (di SQL, komentar memakai `--`).
+
+Ada dua padanan SQL, keduanya tidak memerlukan repo:
+
+**A. Tanpa terminal sama sekali** — tempel berkas
+[`docs/runbook/sql/provision-admin.sql`](sql/provision-admin.sql) ke SQL Editor,
+ganti `__EMAIL__`, `__NAME__`, `__COMPANY__`, `__SLUG__`, dan `__HASH__`.
+Hash diambil dari `npm run db:hash-password` (dijalankan rekan/CI) — **jangan**
+mengetik password biasa.
+
+**B. Punya terminal tapi ingin SQL-nya** — biarkan generator yang mengisi:
+
+```bash
+npm run db:admin-sql -- --email anda@domain.id --name "Nama Anda" --print-password > admin.sql
+# buka admin.sql, tempel seluruh isinya ke SQL Editor Neon
+```
+
+Perintah di atas hanya mencetak SQL ke berkas dan password ke terminal; tidak
+menyentuh database. Kedua jalur sudah diuji: dijalankan dua kali berturut-turut
+tetap menghasilkan satu akun dan satu keanggotaan (`ON CONFLICT`).
+
+Bila Anda punya `DATABASE_URL` di terminal, jalur yang lebih praktis adalah
+`npm run db:create-admin` (sama hasilnya, langsung dieksekusi).
+
 ## Pemulihan akses (lupa password)
 
 Password disimpan sebagai hash **scrypt** — tidak dapat dilihat atau
