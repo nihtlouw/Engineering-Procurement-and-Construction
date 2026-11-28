@@ -1,0 +1,62 @@
+name: Migrasi database
+
+# Dijalankan MANUAL dari tab Actions di GitHub (bukan otomatis saat push).
+# Alasan: migrasi mengubah database production, jadi harus menjadi tindakan
+# sadar dengan pilihan "check" dulu sebelum "apply".
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "check = lihat migrasi tertunda; apply = terapkan ke DATABASE_URL"
+        required: true
+        default: check
+        type: choice
+        options:
+          - check
+          - apply
+
+concurrency:
+  group: db-migrate
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Cek rahasia tersedia
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::Secret DATABASE_URL belum diisi. Tambahkan di Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+
+      - name: Daftar migrasi tertunda
+        if: inputs.mode == 'check'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npx tsx scripts/migrate.ts --check
+
+      - name: Terapkan migrasi
+        if: inputs.mode == 'apply'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npx tsx scripts/migrate.ts
+
+      - name: Verifikasi isolasi & invariant
+        if: inputs.mode == 'apply'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          # Di production storage wajib s3; verifikasi tidak memakainya, tetapi
+          # assertRuntimeEnv() hanya dijalankan aplikasi, bukan skrip ini.
+          FILE_SIGNING_SECRET: ${{ secrets.FILE_SIGNING_SECRET }}
+        run: npx tsx scripts/verify-rls.ts
