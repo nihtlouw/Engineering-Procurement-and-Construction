@@ -19,8 +19,14 @@ ALTER TABLE file_objects ADD COLUMN IF NOT EXISTS width integer;
 ALTER TABLE file_objects ADD COLUMN IF NOT EXISTS height integer;
 ALTER TABLE file_objects ADD COLUMN IF NOT EXISTS original_size_bytes integer;
 
-ALTER TABLE file_objects ADD CONSTRAINT file_objects_storage_provider_valid
-  CHECK (storage_provider IN ('DB', 'LOCAL', 'S3')) NOT VALID;
+DO $mig$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'file_objects_storage_provider_valid') THEN
+    ALTER TABLE file_objects
+      ADD CONSTRAINT file_objects_storage_provider_valid
+      CHECK (storage_provider IN ('DB', 'LOCAL', 'S3')) NOT VALID;
+  END IF;
+END $mig$;
 CREATE INDEX IF NOT EXISTS file_objects_provider_idx ON file_objects (company_id, storage_provider);
 
 /* -------------------------------------------------------------------------- */

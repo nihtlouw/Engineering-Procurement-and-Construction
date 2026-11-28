@@ -86,6 +86,12 @@ SELECT set_config('app.current_company_id',
                   (SELECT id::text FROM companies WHERE slug = 'default'), false);
 
 -- 24 tabel data bisnis: company_id NOT NULL + FK + index.
+/* Idempoten per objek: kolom, FK, dan index masing-masing diperiksa lebih dulu.
+   Sebelumnya loop ini menulis `ADD COLUMN` tanpa IF NOT EXISTS, sehingga pada
+   database yang kolomnya SUDAH ada (instalasi lama sebelum skema versi ini,
+   atau database yang dibangun dari 0000_baseline_schema.sql) migrasi GAGAL
+   dengan "column company_id of relation ... already exists" — padahal berkas
+   ini menyatakan dirinya idempoten. */
 DO $$
 DECLARE t text;
 BEGIN
@@ -96,9 +102,20 @@ BEGIN
     'schedule_items','progress_updates','change_orders','punch_items','handover_items',
     'documents','activity_logs','notifications','company_settings'
   ] LOOP
-    EXECUTE format('ALTER TABLE %I ADD COLUMN company_id uuid NOT NULL DEFAULT app_current_company_id()', t);
-    EXECUTE format('ALTER TABLE %I ADD CONSTRAINT %I FOREIGN KEY (company_id) REFERENCES companies(id)', t, t || '_company_fk');
-    EXECUTE format('CREATE INDEX %I ON %I (company_id)', t || '_company_idx', t);
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = t AND column_name = 'company_id'
+    ) THEN
+      EXECUTE format('ALTER TABLE %I ADD COLUMN company_id uuid NOT NULL DEFAULT app_current_company_id()', t);
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = t || '_company_fk') THEN
+      EXECUTE format('ALTER TABLE %I ADD CONSTRAINT %I FOREIGN KEY (company_id) REFERENCES companies(id)', t, t || '_company_fk');
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND indexname = t || '_company_idx') THEN
+      EXECUTE format('CREATE INDEX %I ON %I (company_id)', t || '_company_idx', t);
+    END IF;
   END LOOP;
 END $$;
 

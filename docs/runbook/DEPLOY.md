@@ -274,6 +274,109 @@ Berkas siap tempel untuk database ini:
 — hanya memakai kolom yang benar-benar ada, menempelkan admin ke company yang
 sudah ada (bukan membuat tenant baru), dan mengganti hash 6 akun demo.
 
+## MIGRASI TANPA TERMINAL — langkah demi langkah (kasus database ini)
+
+Database Anda punya skema lama yang **tidak** pernah dibuat oleh rantai migrasi
+(kolom seperti `projects.stage` tidak ada). Karena itu:
+
+- menjalankan rantai migrasi saja **selalu gagal** (`column "stage" does not exist`);
+- skema harus dibangun ulang dari nol, **setelah** data lama di-backup.
+
+Saya sudah menguji urutan di bawah pada Postgres in-process (PGlite) untuk tiga
+kondisi: database kosong, database berisi skema lama + data, dan database yang
+sudah dimigrasi. Semuanya lolos.
+
+### Langkah 0 — WAJIB: buat cabang database (5 menit, sekali klik)
+
+Ini pengganti `pg_dump`. Tanpa ini tidak ada jalan kembali.
+
+1. <https://console.neon.tech> → pilih project Anda.
+2. Menu **Branches** → **Create branch**.
+3. Nama: `backup-sebelum-migrasi`. **Create**.
+4. Catat nama branch itu. Kalau ada yang salah di langkah berikutnya, Anda bisa
+   membuat branch baru dari `backup-sebelum-migrasi` dan mengarahkan
+   `DATABASE_URL` Vercel kembali ke sana.
+
+### Langkah 1 — unduh skrip migrasi dari GitHub (tanpa terminal)
+
+1. Buka <https://github.com/nihtlouw/Engineering-Procurement-and-Construction/actions/workflows/migrate.yml>
+2. Klik **Run workflow** → `mode`: **check** → **Run workflow**.
+   Hasilnya hanya daftar migrasi tertunda (tidak mengubah apa pun).
+3. Untuk mendapatkan **berkas SQL** yang bisa ditempel ke Neon, jalankan dari
+   laptop siapa pun yang punya terminal:
+
+   ```bash
+   npm run db:migrate:sql -- --fresh > migrate.sql
+   ```
+
+   (Kalau tidak ada yang bisa menjalankan ini, gunakan **Jalur B** di bawah —
+   GitHub Actions — yang tidak butuh berkas.)
+
+### Jalur B (paling praktis): GitHub Actions — tanpa berkas, tanpa terminal
+
+1. GitHub → **Settings** → **Secrets and variables** → **Actions** →
+   **New repository secret**:
+   - `DATABASE_URL` = connection string Neon **direct** (bukan `-pooler`),
+     contoh `postgresql://user:pass@ep-xxx.ap-southeast-1.aws.neon.tech/neondb?sslmode=require`
+2. Tab **Actions** → **Migrasi database** → **Run workflow** → `mode` **check**.
+   Baca log: akan terlihat migrasi mana yang tertunda.
+3. **Penting:** bila database masih berskema lama, jalankan dulu
+   `scripts/sql/reset-schema.sql` lewat **Neon SQL Editor** (langkah 2 di bawah).
+4. Jalankan lagi **Run workflow** dengan `mode` = **apply**.
+
+### Langkah 2 — Neon SQL Editor: reset lalu tempel skrip migrasi
+
+Buka <https://console.neon.tech> → project → **SQL Editor**.
+
+**2a. Hapus skema lama** (DESTRUKTIF — hanya setelah Langkah 0 selesai).
+Buka `scripts/sql/reset-schema.sql` di GitHub, klik **Raw**, salin semua,
+tempel, **Run**. Hasil akhirnya harus `sisa_tabel = 0`.
+
+**2b. Bangun skema baru.** Buka `migrate.sql` yang Anda unduh/dihasilkan
+(langkah 1), salin semua, tempel, **Run**. Perkiraan: < 10 detik.
+
+**2c. Periksa hasilnya.** Jalankan tiga kueri ini:
+
+```sql
+select count(*) as jumlah_tabel
+  from information_schema.tables
+ where table_schema = 'public' and table_type = 'BASE TABLE';
+
+select count(*) as tabel_force_rls
+  from pg_class c join pg_namespace n on n.oid = c.relnamespace
+ where n.nspname = 'public' and c.relkind = 'r' and c.relforcerowsecurity;
+
+select * from _baseline_warnings;
+```
+
+Yang diharapkan: `jumlah_tabel` = **44**, `tabel_force_rls` = **33**,
+`_baseline_warnings` kosong (atau berisi catatan yang bisa Anda kirimkan ke saya).
+
+### Langkah 3 — buat akun admin Anda
+
+Masih di SQL Editor, tempel isi
+`docs/runbook/sql/provision-admin-aiengineer2027life.sql`, lalu **Run**.
+Hasil akhir: satu baris dengan `role = ADMIN`, `company_role = ADMIN`.
+
+### Langkah 4 — masuk dan uji
+
+1. Buka aplikasi di Vercel → masuk dengan `aiengineer2027life@gmail.com` dan
+   password yang ada di berkas SQL itu.
+2. **Segera ganti password**: menu akun → **Ganti password**.
+3. Buka **Pengguna & peran**, lalu nonaktifkan akun `admin@ardaya.id` bila tidak
+   dipakai.
+
+### Kalau ada yang gagal
+
+Jangan menempel ulang skrip atau mengulang dari awal secara membabi buta.
+Kirimkan ke saya:
+
+1. pesan error lengkap dari Neon (termasuk baris yang disorot), dan
+2. isi `select * from _baseline_warnings;`
+
+Data lama tidak bisa diselamatkan otomatis, tetapi ada di branch cadangan
+(Langkah 0) dan bisa diekspor lewat **Neon → Tables → Export**.
+
 ## Menjalankan migrasi tanpa terminal
 
 Migrasi **harus** dijalankan sekali pada database Neon sebelum fitur apa pun
@@ -369,6 +472,7 @@ bisa menjalankan perintah**, bukan berdasarkan mana yang paling cepat.
 |---|---|---|
 | Undang lewat email | UI **Pengguna & peran → Undang** (butuh `EMAIL_DRIVER`+`RESEND_API_KEY`) | produksi: pengguna memilih password sendiri, admin tidak pernah tahu |
 | `npm run db:set-passwords` | terminal laptop / GitHub Actions | setelah impor data demo: 6 akun (atau semua) dapat password acak berbeda |
+| `npm run db:baseline` | terminal laptop | membangun ulang `drizzle/0000_baseline_schema.sql` dari `schema.ts` (dipakai saat skema berubah) |
 | `npm run db:hash-password --email a,b,c` | terminal laptop | menghasilkan **satu** blok SQL untuk banyak email sekaligus, siap tempel di Neon |
 
 **Jalur yang dianjurkan untuk produksi: undangan.** Password tidak pernah

@@ -16,13 +16,23 @@
  *   pernyataan gagal, periksa pesannya lalu jalankan ulang — yang sudah
  *   diterapkan akan dilewati karena idempoten.
  * - Skrip sengaja TIDAK membungkus semuanya dalam satu transaksi: beberapa
- *   migrasi memakai `CREATE INDEX CONCURRENTLY`-style DDL dan komentar panjang;
- *   menjalankan per berkas lebih mudah didiagnosis bila ada yang gagal.
+ *   migrasi memakai DDL panjang dan komentar; menjalankan per berkas lebih mudah
+ *   didiagnosis bila ada yang gagal.
+ *
+ * MODE `--fresh` (untuk database yang skemanya TIDAK cocok dengan migrasi):
+ *   npm run db:migrate:sql -- --fresh > migrate.sql
+ * Hasilnya berisi: reset skema (DESTRUKTIF) -> baseline penuh -> 0001..0011.
+ * Ini satu-satunya jalur yang bekerja bila database berisi skema lama yang
+ * kolomnya tidak pernah dibuat oleh migrasi mana pun (mis. projects.stage).
+ * Tanpa `--fresh`, 0000_baseline_schema.sql tetap disertakan lebih dulu sehingga
+ * tabel yang belum ada ikut dibuat, dan tabel yang sudah ada dilewati.
  */
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 
 const DIR = path.resolve(process.cwd(), "drizzle");
+
+const FRESH = process.argv.slice(2).includes("--fresh");
 
 function parseFrom(argv: string[]) {
   const index = argv.findIndex((arg) => arg === "--from");
@@ -36,7 +46,13 @@ function main() {
   const files = readdirSync(DIR).filter((file) => file.endsWith(".sql")).sort();
   if (!files.length) throw new Error("Tidak ada file .sql di folder drizzle/.");
 
-  const selected = from ? files.filter((file) => file >= from) : files;
+  let selected = from ? files.filter((file) => file >= from) : files;
+  // Baseline penuh selalu ikut bila ada: pada database kosong, 0000 tidak
+  // membuat users/sessions/24 tabel bisnis sehingga rantai pasti gagal.
+  const baseline = "0000_baseline_schema.sql";
+  if (selected.length && !selected.includes(baseline) && !from) {
+    selected = [baseline, ...selected];
+  }
   if (!selected.length) throw new Error(`Tidak ada migrasi >= ${from}.`);
 
   const out: string[] = [
@@ -54,6 +70,18 @@ function main() {
     "-- ke berkas ini. SQL hanya mengenal komentar `--` dan `/* */`.",
     "-- ===========================================================================",
     "",
+    ...(FRESH ? [
+      "-- !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!",
+      "-- MODE FRESH: SELURUH SKEMA `public` DIHAPUS LEBIH DULU (DATA HILANG).",
+      "-- Alasan: skema di database ini tidak dibuat oleh rantai migrasi, sehingga",
+      "-- migrasi selalu gagal. Buat branch database di Neon sebagai cadangan",
+      "-- SEBELUM menjalankan berkas ini. Bagian yang menghapus diberi tanda",
+      "-- dengan 'reset-schema' di bawah.",
+      "-- !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!",
+      "",
+      readFileSync(path.resolve(process.cwd(), "scripts/sql/reset-schema.sql"), "utf8"),
+      "",
+    ] : []),
     "create table if not exists _migrations (",
     "  name text primary key,",
     "  applied_at timestamptz not null default now()",

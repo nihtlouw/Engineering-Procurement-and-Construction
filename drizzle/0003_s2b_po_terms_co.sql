@@ -31,7 +31,13 @@ CREATE INDEX IF NOT EXISTS expense_lines_po_item_idx ON expense_lines (po_item_i
 
 ALTER TABLE purchase_records ADD COLUMN IF NOT EXISTS received_at timestamptz;
 ALTER TABLE purchase_records ADD COLUMN IF NOT EXISTS closed_at timestamptz;
-ALTER TABLE purchase_records ADD CONSTRAINT purchase_dpp_nonneg CHECK (dpp_amount >= 0) NOT VALID;
+DO $mig$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'purchase_dpp_nonneg') THEN
+    ALTER TABLE purchase_records
+      ADD CONSTRAINT purchase_dpp_nonneg CHECK (dpp_amount >= 0) NOT VALID;
+  END IF;
+END $mig$;
 
 /* -------------------------------------------------------------------------- */
 /* 2. Termin: kumulatif tagihan & status (audit B5)                          */
@@ -40,9 +46,18 @@ ALTER TABLE purchase_records ADD CONSTRAINT purchase_dpp_nonneg CHECK (dpp_amoun
 ALTER TABLE contract_terms ADD COLUMN IF NOT EXISTS invoiced_amount numeric(18,2) NOT NULL DEFAULT 0;
 ALTER TABLE contract_terms ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'OPEN';
 ALTER TABLE contract_terms ADD COLUMN IF NOT EXISTS is_auto_amount boolean NOT NULL DEFAULT true;
-ALTER TABLE contract_terms ADD CONSTRAINT contract_terms_invoiced_nonneg CHECK (invoiced_amount >= 0) NOT VALID;
-ALTER TABLE contract_terms ADD CONSTRAINT contract_terms_status_valid
-  CHECK (status IN ('OPEN','PARTIALLY_INVOICED','INVOICED','CLOSED')) NOT VALID;
+DO $mig$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'contract_terms_invoiced_nonneg') THEN
+    ALTER TABLE contract_terms
+      ADD CONSTRAINT contract_terms_invoiced_nonneg CHECK (invoiced_amount >= 0) NOT VALID;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'contract_terms_status_valid') THEN
+    ALTER TABLE contract_terms
+      ADD CONSTRAINT contract_terms_status_valid
+      CHECK (status IN ('OPEN','PARTIALLY_INVOICED','INVOICED','CLOSED')) NOT VALID;
+  END IF;
+END $mig$;
 CREATE INDEX IF NOT EXISTS contract_terms_project_status_idx ON contract_terms (company_id, project_id, status);
 
 ALTER TABLE customer_invoices ADD COLUMN IF NOT EXISTS over_invoice_reason text;
@@ -60,8 +75,14 @@ ALTER TABLE change_orders ADD COLUMN IF NOT EXISTS evidence_file_id text REFEREN
 ALTER TABLE change_orders ADD COLUMN IF NOT EXISTS cancel_reason text;
 ALTER TABLE change_orders ADD COLUMN IF NOT EXISTS cancelled_at timestamptz;
 ALTER TABLE change_orders ADD COLUMN IF NOT EXISTS superseded_by_variation_id text;
-ALTER TABLE change_orders ADD CONSTRAINT change_orders_variation_type_valid
-  CHECK (variation_type IN ('ADD','OMIT','SUBSTITUTE')) NOT VALID;
+DO $mig$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'change_orders_variation_type_valid') THEN
+    ALTER TABLE change_orders
+      ADD CONSTRAINT change_orders_variation_type_valid
+      CHECK (variation_type IN ('ADD','OMIT','SUBSTITUTE')) NOT VALID;
+  END IF;
+END $mig$;
 
 /* -------------------------------------------------------------------------- */
 /* 4. Backfill NON-DESTRUKTIF per company                                     */

@@ -72,8 +72,14 @@ END $$;
 ALTER TABLE projects ALTER COLUMN contract_value_current SET DEFAULT 0;
 UPDATE projects SET contract_value_current = contract_value WHERE contract_value_current IS NULL;
 ALTER TABLE projects ALTER COLUMN contract_value_current SET NOT NULL;
-ALTER TABLE projects ADD CONSTRAINT projects_contract_value_nonneg
-  CHECK (contract_value_current >= 0) NOT VALID;
+DO $mig$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'projects_contract_value_nonneg') THEN
+    ALTER TABLE projects
+      ADD CONSTRAINT projects_contract_value_nonneg
+      CHECK (contract_value_current >= 0) NOT VALID;
+  END IF;
+END $mig$;
 
 CREATE OR REPLACE FUNCTION trg_recalc_contract_from_change_order() RETURNS trigger
 LANGUAGE plpgsql AS $$
