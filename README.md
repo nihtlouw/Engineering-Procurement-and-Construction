@@ -22,6 +22,10 @@ npm run dev
 
 ```bash
 SEED_DEMO_PASSWORD='password-anda' npm run db:seed:demo
+
+# Siapkan password akun (acak berbeda per akun, dicetak sekali)
+npm run db:set-passwords -- --only-demo --dry-run
+npm run db:set-passwords -- --only-demo
 ```
 
 Seed **tidak pernah** dijalankan dari HTTP request dan diblokir di production kecuali `ALLOW_DEMO_SEED=yes`. Tidak ada password bawaan di kode dan tidak ada kredensial demo yang ditampilkan di halaman login.

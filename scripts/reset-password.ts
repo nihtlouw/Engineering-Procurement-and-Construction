@@ -24,6 +24,7 @@ import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { activityLogs, companies, memberships, sessions, users } from "../src/db/schema";
+import { hasLockColumns } from "./hash-password";
 
 config({ path: ".env.local", quiet: true });
 
@@ -87,11 +88,16 @@ async function main() {
     }
 
     const activeSessions = await db.select({ id: sessions.id }).from(sessions).where(eq(sessions.userId, account.id));
+    // Kolom kunci login hanya ada setelah migrasi 0010. Menyebutnya tanpa
+    // pemeriksaan membuat reset darurat gagal di database yang belum dimigrasi.
+    const lockColumns = await hasLockColumns((sqlText) => pool.query(sqlText));
     await db.update(users).set({
       passwordHash: hashPassword(password),
-      failedLoginCount: 0,
-      lockedUntil: null,
+      ...(lockColumns ? { failedLoginCount: 0, lockedUntil: null } : {}),
     }).where(eq(users.id, account.id));
+    if (!lockColumns) {
+      console.log("Catatan: kolom kunci login belum ada (migrasi 0010 belum diterapkan) — dilewati.");
+    }
     await db.delete(sessions).where(eq(sessions.userId, account.id));
 
     if (!companyId) {
