@@ -15,7 +15,7 @@ import { hashPasswordForStorage, verifyPasswordHash } from "./hash-password";
 const TEMPLATE = "docs/runbook/sql/provision-admin.sql";
 
 function parseArgs(argv: string[]) {
-  const args: { email?: string; name?: string; company?: string; password?: string; printPassword: boolean } = { printPassword: false };
+  const args: { email?: string; name?: string; company?: string; password?: string; demoPassword?: string; printPassword: boolean } = { printPassword: false };
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
     const next = argv[index + 1];
@@ -24,6 +24,7 @@ function parseArgs(argv: string[]) {
     else if (token === "--name") { args.name = next; index += 1; }
     else if (token === "--company") { args.company = next; index += 1; }
     else if (token === "--password") { args.password = next; index += 1; }
+    else if (token === "--demo-password") { args.demoPassword = next; index += 1; }
   }
   return args;
 }
@@ -56,6 +57,10 @@ function main() {
     return;
   }
   const hash = hashPasswordForStorage(password);
+  // Hash untuk akun demo lama: satu password untuk 6 akun, sehingga akun tersebut
+  // tidak lagi memakai hash bersama yang tidak diketahui siapa pun.
+  const demoPassword = args.demoPassword ?? "ArdayaDemo2026";
+  const demoHash = hashPasswordForStorage(demoPassword);
   if (!verifyPasswordHash(password, hash)) {
     console.error("Hash gagal diverifikasi — jangan dipakai.");
     process.exitCode = 1;
@@ -66,13 +71,17 @@ function main() {
     "-- Dihasilkan oleh `npm run db:admin-sql` — SQL siap tempel ke SQL Editor Neon.",
     `-- Email admin : ${email}`,
     `-- Company     : ${company} (${slugify(company)})`,
+    `-- Akun demo   : 6 akun @ardaya.id diberi password "${demoPassword}"`,
     "-- Jalankan SELURUH berkas ini sekaligus (satu transaksi).",
     "",
     "begin;",
     "",
+    "-- Company HANYA dibuat bila belum ada satu pun. Membuat company baru saat",
+    "-- data sudah ada akan menghasilkan tenant kosong: proyek & user lama tidak",
+    "-- terlihat karena berada di company lain.",
     "insert into companies (slug, name, legal_name, email)",
-    `values ('${slugify(company)}', '${company.replace(/'/g, "''")}', '${company.replace(/'/g, "''")}', '${email}')`,
-    "on conflict (slug) do nothing;",
+    `select '${slugify(company)}', '${company.replace(/'/g, "''")}', '${company.replace(/'/g, "''")}', '${email}'`,
+    " where not exists (select 1 from companies);",
     "",
     "insert into users (id, name, email, role, title, password_hash)",
     "values (",
@@ -87,25 +96,19 @@ function main() {
     "  set password_hash = excluded.password_hash,",
     "      is_active = true;",
     "",
+    "-- Keanggotaan ditempelkan ke company YANG SUDAH ADA (yang tertua = tenant",
+    "-- sebenarnya tempat proyek & data tersimpan), bukan ke company baru.",
     "insert into memberships (company_id, user_id, company_role, status)",
     "select c.id, u.id, 'ADMIN', 'ACTIVE'",
-    "  from companies c, users u",
-    ` where c.slug = '${slugify(company)}'`,
-    `   and u.email = '${email}'`,
+    "  from (select id from companies order by created_at, id limit 1) c, users u",
+    ` where u.email = '${email}'`,
     "on conflict (company_id, user_id) do update",
     "  set company_role = 'ADMIN', status = 'ACTIVE', updated_at = now();",
     "",
-    "select set_config('app.current_company_id', (select id::text from companies where slug = '" + slugify(company) + "'), true);",
-    "",
-    "insert into activity_logs (object_type, object_id, project_id, action, changes, reason)",
-    "values (",
-    "  'USER',",
-    `  (select id from users where email = '${email}'),`,
-    "  null,",
-    "  'ADMIN_ACCOUNT_PROVISIONED',",
-    `  jsonb_build_array(jsonb_build_object('field', 'email', 'old', null, 'new', '${email}')),`,
-    "  'Provisioning admin lewat SQL Editor'",
-    ");",
+    "update users",
+    `   set password_hash = '${demoHash}'`,
+    " where email in ('admin@ardaya.id','estimator@ardaya.id','field@ardaya.id',",
+    "                 'finance@ardaya.id','pm@ardaya.id','procurement@ardaya.id');",
     "",
     "commit;",
     "",
@@ -123,7 +126,7 @@ function main() {
   // tersimpan bila output diarahkan ke berkas.
   process.stdout.write(sql);
   if (args.printPassword) {
-    process.stderr.write(`\nPassword untuk ${email}: ${password}\n(Simpan di pengelola sandi, lalu ganti lewat Pengaturan → Password akun.)\n`);
+    process.stderr.write(`\nPassword admin ${email}: ${password}\nPassword 6 akun demo @ardaya.id: ${demoPassword}\n(Simpan di pengelola sandi, lalu ganti lewat Pengaturan → Password akun.)\n`);
   } else {
     process.stderr.write(`\nPassword acak dibuat tetapi TIDAK dicetak. Ulangi dengan --print-password, atau set sendiri dengan --password.\n`);
   }
